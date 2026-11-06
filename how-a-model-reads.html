@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a model reads</title>
+<meta name="description" content="Byte-pair encoding learned from scratch on tiny-shakespeare, shown merge by merge.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --fg:#ededed; --dim:#8e8e8e; --mute:#5f5f5f; --faint:#2a2a2a; --line:#191919; --panel:#0a0a0a;
+  --accent:#f2c46d; --accent-soft:rgba(242,196,109,.13); --accent-line:rgba(242,196,109,.45);
+  --serif:"Lora",Georgia,"Times New Roman",serif;
+  --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#000; --fg:#ededed; } }
+:root[data-theme="dark"]{ --bg:#000; --fg:#ededed; }
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 15px/1.6 var(--sans);-webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums}
+a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:3px}
+a:hover{text-decoration-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wrap{max-width:1200px;margin:0 auto;padding:64px 40px 48px}
+
+/* header */
+.kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 18px}
+h1{font:italic 400 52px/1.05 var(--serif);letter-spacing:-.015em;margin:0 0 20px}
+h2{font:italic 400 24px/1.2 var(--serif);margin:0 0 14px;letter-spacing:-.005em}
+.lede{max-width:640px;margin:0;color:var(--dim);font-size:16px;line-height:1.65}
+.lede b{color:var(--fg);font-weight:500}
+header{margin-bottom:48px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:56px;align-items:end}
+.card{margin:0;border-top:1px solid var(--line)}
+.card div{display:flex;justify-content:space-between;gap:12px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13px}
+.card dt{color:var(--mute)}
+.card dd{margin:0;color:var(--fg)}
+.card dd.acc{color:var(--accent)}
+
+/* main grid */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:56px;align-items:start}
+.label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.presets{display:flex;gap:4px;flex-wrap:wrap}
+.chip{font:500 12px/1 var(--sans);color:var(--dim);background:none;border:1px solid var(--line);padding:7px 11px;border-radius:999px;cursor:pointer;transition:color .2s,border-color .2s,background .2s}
+.chip:hover{color:var(--fg);border-color:var(--faint)}
+.chip[aria-pressed="true"]{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+textarea{display:block;width:100%;min-height:80px;max-height:340px;resize:none;overflow-y:auto;background:var(--panel);color:var(--fg);border:1px solid var(--line);
+  border-radius:10px;padding:14px 16px;font:400 15px/1.6 var(--sans);caret-color:var(--accent);transition:border-color .2s}
+textarea:focus{outline:none;border-color:var(--accent-line)}
+
+/* tokens */
+.tokens-head{margin-top:28px}
+#info{font-size:12.5px;color:var(--dim);min-height:20px;margin:0;text-align:right}
+#info b{color:var(--fg);font-weight:500}
+#tokens{min-height:150px;max-height:420px;overflow:auto;padding:16px;border:1px solid var(--line);border-radius:10px;line-height:2.05;font-size:16px}
+#tokens:focus-visible{outline-offset:0}
+.tk{display:inline-flex;vertical-align:baseline;margin:0 3px 0 0;cursor:default}
+.sg{display:inline-block;padding:1px 0;line-height:1.45;white-space:pre;background:var(--c);color:var(--t)}
+.sg:first-child{padding-left:5px;border-top-left-radius:6px;border-bottom-left-radius:6px}
+.sg:last-child{padding-right:5px;border-top-right-radius:6px;border-bottom-right-radius:6px}
+.ws{opacity:.42}
+.tk.unk .sg{background:transparent;color:var(--dim);box-shadow:inset 0 0 0 1px #4a4a4a;border-radius:6px}
+.tk.cur .sg{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.tk.hl .sg{filter:brightness(1.35)}
+.more{color:var(--mute);font-size:13px;padding-left:4px}
+
+/* readout */
+.readout{display:grid;grid-template-columns:repeat(3,auto) 1fr;gap:12px 40px;align-items:end;margin:22px 0 0}
+.stat .n{font:500 30px/1 var(--sans);letter-spacing:-.02em}
+.stat .k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin-top:8px}
+.stat.ratio .n{color:var(--accent)}
+.compare{font-size:13px;color:var(--dim);text-align:right;line-height:1.5}
+.compare b{color:var(--fg);font-weight:500}
+
+/* scrubber */
+.scrub{margin-top:36px;padding-top:26px;border-top:1px solid var(--line)}
+.scrub-top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.stepnum{font:italic 400 40px/1 var(--serif)}
+.stepnum small{font:400 14px/1 var(--sans);font-style:normal;color:var(--dim);margin-left:8px}
+.btns{display:flex;gap:6px}
+.btn{font:500 13px/1 var(--sans);color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;cursor:pointer;min-width:40px;transition:border-color .2s,color .2s}
+.btn:hover{border-color:var(--faint)}
+.btn[aria-pressed="true"]{color:var(--accent);border-color:var(--accent-line)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;margin:18px 0 6px;background:transparent;cursor:pointer}
+input[type=range]:focus-visible{outline:none}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 1px var(--accent),0 0 0 6px rgba(242,196,109,.28)}
+input[type=range]:focus-visible::-moz-range-thumb{box-shadow:0 0 0 6px rgba(242,196,109,.28)}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:3px;background:linear-gradient(to right,var(--accent) 0 var(--p,0%),var(--faint) var(--p,0%) 100%)}
+input[type=range]::-moz-range-track{height:3px;border-radius:3px;background:var(--faint)}
+input[type=range]::-moz-range-progress{height:3px;border-radius:3px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7.5px;border-radius:50%;background:var(--accent);border:3px solid #000;box-shadow:0 0 0 1px var(--accent)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent);border:3px solid #000}
+.ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--mute)}
+#now{margin:16px 0 0;font-size:14px;color:var(--dim);min-height:24px}
+#now b{color:var(--fg);font-weight:500}
+
+/* mini pills used in lists and notes */
+.mp{display:inline-block;white-space:pre;font-size:13px;line-height:1.5;padding:0 5px;border-radius:5px;background:var(--c);color:var(--t);margin-right:2px}
+.mp.unk{background:transparent;color:var(--dim);box-shadow:inset 0 0 0 1px #4a4a4a}
+.op{color:var(--mute);margin:0 4px;font-size:12px}
+
+/* curve */
+.curve{margin-top:30px}
+.curve-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.curve-head p{margin:0;font-size:12.5px;color:var(--dim)}
+.plot{position:relative;height:110px;margin:14px 0 0 44px;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
+.plot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.plot .dot{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(242,196,109,.18)}
+.plot .vline{position:absolute;top:0;bottom:0;width:1px;background:var(--accent-line)}
+.ylab{position:absolute;right:calc(100% + 8px);font-size:11px;color:var(--mute);line-height:1;transform:translateY(-50%)}
+.xlab{display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin:6px 0 0 44px}
+.yunit{font-size:11px;color:var(--mute);margin:0 0 0 44px}
+
+/* side list */
+aside{position:sticky;top:24px}
+aside .label{margin-bottom:12px}
+#list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+#list li{border-bottom:1px solid var(--line)}
+#list button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:8px;width:100%;padding:8px 8px 8px 10px;cursor:pointer;border-left:2px solid transparent;transition:background .15s}
+#list button:hover{background:#0c0c0c}
+#list button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+#list .num{font-size:12px;color:var(--mute)}
+#list .pair{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#list .cnt{font-size:12px;color:var(--dim);text-align:right}
+#list .future{opacity:.38}
+#list .current{border-left-color:var(--accent);background:var(--accent-soft)}
+#list .current .num{color:var(--accent)}
+#list .seen::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:middle}
+.legend{font-size:12px;color:var(--mute);margin:12px 0 0;line-height:1.6}
+.legend i{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);vertical-align:middle;margin:0 4px 0 0}
+
+/* lower panels */
+.lower{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:72px}
+.panel{border:1px solid var(--line);border-radius:14px;padding:28px 30px;background:var(--panel)}
+.panel ol,.panel ul{margin:0;padding:0 0 0 20px}
+.panel li{margin:0 0 14px;color:var(--dim);line-height:1.65;font-size:14.5px}
+.panel li::marker{color:var(--mute)}
+.panel li b{color:var(--fg);font-weight:500}
+code{font:400 12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#cfcfcf;background:#141414;padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.ex{display:inline-flex;flex-wrap:wrap;gap:2px;vertical-align:baseline}
+
+footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);font-size:12.5px;color:var(--mute);line-height:1.8;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+footer p{margin:0;max-width:760px}
+.credit{color:#4a4a4a}
+
+@media (max-width: 980px){
+  .grid{grid-template-columns:1fr;gap:44px}
+  header{grid-template-columns:1fr;gap:32px}
+  aside{position:static}
+  .lower{grid-template-columns:1fr}
+}
+@media (max-width: 600px){
+  .wrap{padding:40px 16px 36px}
+  h1{font-size:38px}
+  .lede{font-size:15px}
+  .readout{grid-template-columns:repeat(3,1fr);gap:14px 12px}
+  .stat .n{font-size:24px}
+  .compare{grid-column:1 / -1;text-align:left}
+  .stepnum{font-size:34px}
+  #tokens{padding:12px;font-size:15px;min-height:120px}
+  .panel{padding:22px 18px}
+  #list button{grid-template-columns:40px 1fr auto}
+  .lower{margin-top:56px}
+  header{gap:26px;margin-bottom:36px}
+  .xmid{display:none}
+  .card{display:grid;grid-template-columns:repeat(3,1fr);border-top:0;gap:14px 10px}
+  .card div{flex-direction:column-reverse;justify-content:flex-end;gap:3px;padding:0;border:0;font-size:11px;line-height:1.35}
+  .card dd{font-size:14px;font-weight:500}
+}
+@media (prefers-reduced-motion: reduce){
+  *{transition:none !important;animation:none !important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+  <p class="kicker">Byte-pair encoding · trained from scratch</p>
+  <h1>How a model reads</h1>
+  <p class="lede">Before a language model sees a sentence, a tokenizer cuts it into pieces. Byte-pair encoding learns those pieces by counting:
+  it finds the most frequent pair of neighbouring symbols, fuses it into one new symbol, and repeats.
+  This one is character-level and learned <b data-stat="merges"></b> merges from <b data-stat="chars"></b> characters of Shakespeare.
+  Drag the slider to watch the pieces grow.</p>
+  </div>
+  <dl class="card" aria-label="Training log summary">
+    <div><dt>Base characters</dt><dd data-stat="base"></dd></div>
+    <div><dt>Merges learned</dt><dd data-stat="merges"></dd></div>
+    <div><dt>Vocabulary</dt><dd data-stat="vocab"></dd></div>
+    <div><dt>First pair count → last</dt><dd><span data-stat="first_count"></span> → <span data-stat="last_count"></span></dd></div>
+    <div><dt>Training text, in tokens</dt><dd><span data-stat="chars"></span> → <span data-stat="tokens_final"></span></dd></div>
+    <div><dt>Chars per token, at the end</dt><dd class="acc" data-stat="cpt"></dd></div>
+  </dl>
+</header>
+
+<div class="grid">
+<main>
+  <div class="row">
+    <label class="label" for="input">Your text</label>
+    <div class="presets" role="group" aria-label="Example texts">
+      <button class="chip" data-preset="mix" aria-pressed="false">Mixed</button>
+      <button class="chip" data-preset="bard" aria-pressed="false">Shakespeare</button>
+      <button class="chip" data-preset="modern" aria-pressed="false">Modern</button>
+      <button class="chip" data-preset="code" aria-pressed="false">Code</button>
+      <button class="chip" data-preset="unseen" aria-pressed="false">Unseen characters</button>
+    </div>
+  </div>
+  <textarea id="input" rows="3" maxlength="6000" spellcheck="false" aria-describedby="readout-sr"></textarea>
+
+  <div class="row tokens-head">
+    <p class="label" id="tokens-label">Tokens</p>
+    <p id="info" aria-live="polite"></p>
+  </div>
+  <div id="tokens" tabindex="0" role="group" aria-labelledby="tokens-label" aria-describedby="tokens-help"></div>
+  <p id="tokens-help" class="sr">Use the left and right arrow keys to step through the tokens one at a time.</p>
+
+  <div class="readout" aria-hidden="true">
+    <div class="stat"><div class="n" id="r-chars">0</div><div class="k">Characters</div></div>
+    <div class="stat"><div class="n" id="r-toks">0</div><div class="k">Tokens</div></div>
+    <div class="stat ratio"><div class="n" id="r-ratio">0</div><div class="k">Chars / token</div></div>
+    <div class="compare" id="r-compare"></div>
+  </div>
+  <p class="sr" id="readout-sr" aria-live="polite"></p>
+
+  <section class="scrub" aria-label="Merge step">
+    <div class="scrub-top">
+      <div class="stepnum"><span id="stepnum">0</span><small>of <span data-stat="merges"></span> merges applied</small></div>
+      <div class="btns">
+        <button class="btn" id="prev" aria-label="Previous merge">&#8592;</button>
+        <button class="btn" id="next" aria-label="Next merge">&#8594;</button>
+        <button class="btn" id="play" aria-pressed="false">Play</button>
+      </div>
+    </div>
+    <input type="range" id="step" min="0" value="0" step="1" aria-label="Number of merges applied">
+    <div class="ticks" aria-hidden="true"><span>0 · single characters</span><span><span data-stat="merges"></span> · every merge</span></div>
+    <p id="now"></p>
+  </section>
+
+  <section class="curve" aria-label="Compression of the training text">
+    <div class="curve-head">
+      <p class="label">The training text, compressed</p>
+      <p id="curve-note"></p>
+    </div>
+    <div class="plot" id="plot" aria-hidden="true">
+      <svg viewBox="0 0 1000 100" preserveAspectRatio="none"><path id="curve" fill="none" stroke="#9a9a9a" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>
+      <span class="ylab" id="ytop" style="top:0"></span>
+      <span class="ylab" style="top:100%">1.00</span>
+      <div class="vline" id="vline"></div><div class="dot" id="dot"></div>
+    </div>
+    <div class="xlab" aria-hidden="true"><span>0 merges</span><span class="xmid">chars / token of tiny-shakespeare, after each merge</span><span><span data-stat="merges"></span></span></div>
+  </section>
+</main>
+
+<aside aria-labelledby="list-label">
+  <p class="label" id="list-label">Merges near this step</p>
+  <ol id="list"></ol>
+  <p class="legend">Each row is one merge, in the order it was learned, with how often the pair occurred in the training text at that moment. Faded rows are still to come. <i></i>marks a token that appears in your text.</p>
+</aside>
+</div>
+
+<div class="lower">
+  <section class="panel" aria-labelledby="how">
+    <h2 id="how">How it works</h2>
+    <ol>
+      <li><b>Pre-split.</b> The text is cut into chunks: a word with its leading space, a run of digits, a run of punctuation, or whitespace.
+        Merges never cross a chunk edge, so <span class="ex" data-ex=" the" data-k="all"></span> can exist but a token spanning two words cannot.
+        The rule is one regular expression: <code id="pattern"></code></li>
+      <li><b>Start from characters.</b> Every distinct character in tiny-shakespeare is a token. There are <span data-stat="base"></span>.
+        The text has <span data-stat="chunks"></span> distinct chunks, each counted by how often it appears.</li>
+      <li><b>Count and fuse.</b> Count every pair of neighbouring tokens inside the chunks. Fuse the most frequent pair into a new token everywhere it occurs.
+        Ties go to the pair with the smallest ids. Repeat <span data-stat="merges"></span> times, logging each merge. The whole run takes about <span data-stat="seconds"></span> seconds in plain Python.</li>
+      <li><b>Read new text.</b> Split it the same way, start from characters, then keep applying the earliest-learned merge that fits until none do.
+        The slider simply limits which merges are allowed. Characters never seen in training have no merges, so they stay alone.</li>
+      <li><b>Check.</b> The tokenizer on this page is a few dozen lines of JavaScript reading the exported merge list. On a test set of training lines, new sentences, code and unusual characters, its output equals the Python trainer's token for token.</li>
+    </ol>
+  </section>
+
+  <section class="panel" aria-labelledby="not">
+    <h2 id="not">What BPE does not do</h2>
+    <ul>
+      <li><b>It has no idea what anything means.</b> <span class="ex" data-ex=" the" data-k="all"></span> became a token at merge <span id="the-step"></span> only because
+        <span class="ex" data-ex=" t" data-k="all"></span> and <span class="ex" data-ex="he" data-k="all"></span> sat next to each other <span id="the-count"></span> times. Frequency is the only signal.</li>
+      <li><b>Its pieces depend on the training text.</b> The script format repeats speaker names, so <span class="ex" data-ex="NORTHUMBERLAND" data-k="all"></span> is a single token
+        (merge <span data-stat="longest_step"></span>), while a modern word falls apart: <span class="ex" data-ex="smartphone" data-k="all"></span>.
+        Trained on other text, the same word would split differently.</li>
+      <li><b>It does not know two spellings are one word.</b> <span class="ex" data-ex="the" data-k="all"></span>, <span class="ex" data-ex=" the" data-k="all"></span>,
+        <span class="ex" data-ex="The" data-k="all"></span> and <span class="ex" data-ex="THE" data-k="all"></span> are unrelated ids to the model that reads them.</li>
+      <li><b>It cannot handle what it never saw.</b> This version starts from the characters of Shakespeare, so <span class="ex" data-ex="café 🙂" data-k="all"></span> leaves the
+        new characters outlined and unmerged. GPT-style tokenizers start from raw bytes instead, so nothing is unknown, though rare text still costs many tokens.</li>
+      <li><b>It is small.</b> <span data-stat="merges"></span> merges on <span data-stat="chars"></span> characters of one author. Production tokenizers learn far more merges from far more varied text.</li>
+    </ul>
+  </section>
+</div>
+
+<footer>
+  <p>Byte-pair encoding for subwords: Rico Sennrich, Barry Haddow and Alexandra Birch,
+    <a href="https://arxiv.org/abs/1508.07909">Neural Machine Translation of Rare Words with Subword Units</a>, ACL 2016.
+    The original compression algorithm: Philip Gage, “A New Algorithm for Data Compression”, <i>C Users Journal</i> 12(2), 1994.
+    Training text: tiny-shakespeare from Andrej Karpathy’s <a href="https://github.com/karpathy/char-rnn">char-rnn</a>.</p>
+  <p class="credit">built with Claude for Joe Gao</p>
+</footer>
+</div>
+
+<script id="model" type="application/json">{"kind":"char-level BPE","corpus":"tiny-shakespeare (input.txt from karpathy/char-rnn)","pattern":" ?[A-Za-z]+| ?[0-9]+| ?[^ \\t\\n\\rA-Za-z0-9]+|[ \\t\\n\\r]+(?![^ \\t\\n\\r])|[ \\t\\n\\r]+","base":"\n !$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz","merges":[1,58,46,43,1,39,53,59,1,57,1,51,47,52,1,61,56,43,46,39,52,42,65,66,1,40,47,57,53,56,1,44,43,56,50,50,47,58,53,52,1,42,1,41,43,57,43,52,1,52,1,50,1,63,65,46,39,56,1,46,1,53,65,53,91,68,1,54,74,58,1,21,1,66,57,58,60,43,53,58,67,75,53,61,71,45,39,52,95,44,53,51,1,45,39,58,77,43,57,43,70,63,1,71,41,43,1,74,50,43,39,63,50,42,47,56,43,58,43,42,59,58,70,43,47,51,83,46,89,104,41,46,65,99,1,78,45,46,13,75,80,79,49,43,1,59,68,56,72,43,53,53,47,82,1,43,66,56,72,128,88,58,1,83,97,56,39,42,56,47,92,68,69,58,1,49,110,43,94,78,133,58,17,26,79,42,47,42,32,66,39,57,1,73,118,103,21,26,50,63,56,39,90,47,94,127,59,56,92,78,39,50,21,27,69,53,67,57,85,43,1,84,53,73,56,53,13,30,46,47,68,121,140,42,41,49,39,71,60,81,87,58,92,63,69,74,87,57,43,39,85,53,72,141,39,51,89,53,77,125,59,57,39,75,33,31,47,44,69,43,45,43,32,46,67,82,39,136,69,59,32,53,101,56,56,59,47,84,58,46,67,52,58,81,93,42,90,53,74,52,43,82,43,93,69,54,76,43,1,138,80,39,187,82,77,63,33,15,47,50,67,73,163,19,1,15,56,110,89,43,46,53,152,52,13,26,1,30,32,99,1,60,17,30,27,30,39,102,41,58,68,57,72,99,47,155,69,46,59,50,1,5,17,32,108,58,17,31,137,54,114,50,55,59,14,125,93,58,111,181,56,106,71,43,112,46,90,157,179,130,52,58,59,102,84,43,98,56,86,110,67,58,70,108,1,25,35,99,72,66,1,17,23,226,67,51,43,75,47,41,86,84,40,119,56,63,84,45,47,43,47,103,77,50,80,228,60,88,1,19,18,79,69,66,43,51,111,53,39,73,70,176,21,15,68,58,76,51,39,59,72,160,104,46,104,143,20,43,69,122,53,50,89,106,1,24,1,99,1,198,53,102,24,27,71,42,76,73,72,180,231,106,86,108,81,57,21,197,43,54,250,44,178,16,112,143,44,43,53,75,73,57,112,43,69,120,101,73,213,103,69,61,76,122,77,56,1,79,54,54,1,31,7,7,39,82,65,214,76,52,152,107,137,57,1,27,1,14,76,63,67,56,53,42,25,63,90,123,137,52,47,45,72,79,59,73,71,49,1,20,79,58,1,34,46,63,192,43,44,176,13,57,70,120,43,50,1,251,86,153,140,49,35,66,78,46,24,21,139,82,23,17,60,87,1,48,175,43,303,46,122,102,37,68,70,203,73,112,39,49,45,183,70,261,68,75,52,45,111,165,139,73,94,53,41,47,199,43,166,136,59,43,189,49,32,171,243,180,83,63,98,177,1,28,69,39,70,148,59,51,98,50,80,317,30,27,13,33,118,42,85,158,54,43,127,43,249,84,47,117,27,26,96,53,88,117,1,35,61,212,78,58,174,257,106,52,1,88,51,108,53,114,59,52,21,31,44,244,52,117,1,56,98,53,217,386,42,43,145,119,1,292,47,53,54,58,72,259,291,20,80,149,27,24,16,33,67,375,432,365,94,106,17,24,1,13,47,182,65,207,101,253,91,123,118,75,15,13,201,68,184,63,429,316,156,387,35,128,345,52,69,153,108,117,72,230,35,259,21,44,269,52,47,87,70,93,47,73,70,256,94,84,74,56,79,52,109,44,71,117,163,15,1,37,21,52,39,182,69,84,85,78,67,50,35,43,59,130,61,52,101,39,18,370,53,63,65,402,101,93,13,14,43,41,204,130,52,188,24,13,327,297,27,44,281,181,83,143,67,40,33,17,35,352,76,114,26,53,111,280,80,53,85,120,100,21,142,93,233,446,1,177,32,236,78,43,142,62,166,318,201,78,43,123,65,215,31,53,90,360,92,348,223,20,68,50,72,157,142,63,269,73,39,45,39,200,43,88,58,143,19,306,65,203,223,248,430,273,520,522,524,501,43,44,81,60,148,63,255,52,85,87,107,57,39,103,52,104,111,424,168,114,1,149,20,106,30,37,39,114,29,490,58,78,61,120,465,447,540,156,90,189,337,18,340,58,70,305,361,73,460,138,24,232,70,473,69,50,72,93,80,50,168,52,393,43,51,145,26,106,118,102,65,61,80,216,1,32,113,58,156,538,294,155,21,57,24,17,40,81,44,44,284,341,68,133,103,42,77,73,41,41,106,81,229,184,351,543,1,23,14,43,39,54,47,133,111,373,220,122,35,230,43,43,58,119,70,88,79,255,86,68,229,61,233,153,238,81,59,136,47,64,53,121,237,23,98,253,112,208,163,313,57,57,73,43,158,43,27,56,86,332,54,119,210,63,475,283,67,42,264,51,21,58,37,138,151,196,311,533,439,43,16,35,89,353,113,88,216,57,616,316,86,50,98,73,325,506,6,331,85,296,263,120,46,107,28,246,33,25,193,276,24,223,25,156,32,20,95,474,98,119,160,57,1,16,68,114,98,81,13,63,15,153,59,82,159,73,72,56,85,262,198,43,39,61,65,56,72,120,95,519,101,148,126,108,50,47,73,42,361,52,42,409,89,79,17,27,25,658,69,41,69,512,98,320,397,659,39,117,60,107,89,242,113,93,156,313,183,58,227,50,346,121,632,668,45,81,113,354,294,114,77,296,358,518,54,81,159,52,566,81,30,511,53,182,86,179,298,73,628,681,685,171,1,445,27,25,39,276,174,148,32,248,1,165,14,63,83,43,1,136,32,214,58,66,1,18,39,40,50,87,85,412,58,53,67,329,115,315,275,58,19,30,20,13,72,46,161,51,302,157,340,51,92,195,171,551,224,58,237,713,715,197,15,716,31,481,545,103,718,319,113,107,239,208,270,656,26,79,57,61,137,260,320,57,379,117,50,188,113,45,514,87,14,13,50,196,70,297,56,108,70,39,95,121,1,127,163,13,270,620,83,595,741,88,54,57,90,278,142,184,267,93,51,43,166,103,683,121,24,123,72,646,31,66,67,542,161,54,497,21,72,110,421,79,523,57,41,153,44,79,61,438,67,44,70,242,75,81,151,120,189,117,49,57,68,42,85,279,112,130,119,42,1,22,1,207,93,761,264,87,275,57,86,529,106,57,266,63,98,43,32,78,74,82,78,84,90,43,466,597,50,53,59,182,78,57,94,638,118,56,150,155,161,102,417,480,436,484,793,794,47,108,81,41,86,138,1,145,30,232,166,43,41,66,69,123,22,33,61,215,79,57,112,211,363,246,405,691,408,774,568,809,804,808,26,120,71,58,83,587,85,680,111,262,564,211,25,21,56,247,68,155,263,464,16,37,20,78,65,278,72,83,129,627,15,17,34,431,156,828,484,823,14,30,32,13,41,50,47,124,695,314,19,53,35,215,41,87,47,240,53,57,69,119,161,57,461,42,591,57,31,291,44,58,47,81,65,149,70,53,73,58,84,58,92,415,111,149,140,50,416,43,846,600,26,104,90,815,258,57,433,102,44,157,77,185,94,138,101,419,212,84,374,87,50,114,67,575,114,42,220,117,244,58,495,82,27,52,59,42,93,49,97,378,142,75,43,61,79,49,92,107,151,141,152,307,279,121,31,32,98,149,98,168,170,49,201,63,264,54,631,171,39,119,71,57,81,58,98,125,98,576,100,34,274,844,561,53,86,74,167,315,28,177,71,188,80,370,98,766,111,59,142,868,149,124,174,93,382,240,31,122,39,224,58,63,160,84,179,119,204,40,726,53,47,119,56,120,65,141,69,51,125,63,30,21,38,480,43,239,65,165,77,158,77,468,85,73,94,195,246,20,270,363,308,354,498,209,513,57,590,260,924,931,932,937,20,532,40,196,47,195,51,88,53,606,63,170,80,307,86,180,825,385,79,114,90,528,92,256,229,124,466,880,20,565,45,123,58,61,65,73,80,215,88,277,94,582,135,209,381,401,25,236,31,58,50,54,94,153,103,73,123,46,199,287,586,130,592,53,930,940,15,24,85,594,536,155,1,268,19,17,35,178,35,291,44,350,73,56,77,108,125,46,150,133,351,21,977,978,985,23,33,32,39,130,47,62,70,307,77,165,78,211,86,66,86,461,179,54,349,565,780,943,26,535,42,57,45,124,227,742,73,52,159,63,349,958,707,25,21,232,24,246,28,33,43,124,77,149,86,214,90,647,233,898,243,106,275,44,442,57,1008,1007,17,37,40,43,70,593,72,352,86,53,86,675,111,50,175,117,392,158,738,54,19,181,25,171,31,782,77,341,89,262,240,71,367,477,527,247,13,82,40,58,135,58,327,107,37,123,85,68,112,87,142,445,223,271,832,987,1044,1005,1045,197,14,397,14,1046,18,228,32,800,47,123,70,410,98,636,122,42,166,155,226,1048,248,31,338,431,1051,171,1057,365,1059,1061,16,53,35,141,50,58,60,305,72,53,89,112,92,56,500,944,725,81,28,236,32,417,41,119,65,619,83,57,86,353,93,63,267,178,452,114,635,539,50,44,60,63,79,63,98,866,177,136,437,52,15,50,19,178,26,17,54,415,77,87,77,477,80,642,93,277,101,212,118,329,174,60,367,261,644,278,662,145,1079,1089,1102,246,13,633,43,357,69,464,70,78,88,57,90,196,90,238,142,73,151,321,395,664,819,24,40,50,57,196,126,123,137,764,152,141,762,211,20,237,41,145,69,589,83,208,86,289,150,1116,185,63,232,976,237,16,381,121,706,17,1128,306,15,33,27,168,101,964,178,739,289,419,708,110,873,106,23,1104,42,120,80,93,90,188,94,488,117,280,122,58,139,314,187,747,250,366,382,195,413,287,489,292,514,43,1140,1136,47,300,80,170,80,855,84,57,98,112,168,423,204,52,210,1071,39,122,86,46,160,347,220,82,736,158,24,197,33,52,33,54,68,260,77,195,86,1033,209,63,248,443,303,43,379,910,534,414,579,107,854,526,1175,1168,13,52,48,925,53,103,70,867,116,702,127,87,151,149,20,257,47,60,47,121,151,73,270,378,756,108,16,511,65,556,94,394,113,50,170,58,190,102,264,979,274,87,590,52,637,594,798,58,842,314,1160,980,1195,1058,24,157,54,143,65,888,83,79,95,184,1031,63,51,589,72,714,77,59,111,56,125,43,200,786,423,124,746,1150,1,47,21,13,47,407,78,124,113,42,220,872,265,58,279,103,390,103,395,120,443,1114,670,1137,1233,306,19,341,43,73,47,164,69,377,85,165,108,57,110,123,116,102,139,50,148,43,161,58,174,124,333,49,32,156,69,81,77,53,80,242,116,1221,141,183,230,121,235,53,325,157,1087,1220,1121,1249,1156,114,1259,31,18,923,31,46,137,114,142,283,172,966,210,297,379,103,609,60,902,1066,957,106,1170,84,1261,171,1262,178,6,5,28,1073,43,170,86,168,118,57,142,51,168,63,401,239,732,1276,981,362,1038,856,1283,833,15,197,15,688,32,431,37,1287,54,50,54,88,68,130,70,797,70,807,72,247,161,283,173,57,199,75,263,783,318,239,398,1289,420,317,936,277,1041,1037,1288,600,1302,1290,8,5,13,73,17,283,25,176,72,362,91,619,161,914,166,87,175,164,178,830,201,1055,235,1146,648,982,1,252,35,180,47,79,51,57,53,44,56,451,85,108,98,312,108,63,574,257,711,57,929,192,972,1317,1210,42,14,156,25,178,26,237,42,42,42,81,69,145,88,81,111,47,151,165,187,1065,470,41,829,171,1088,412,1172,903,1335,1346,13,50,13,58,28,397,31,1072,40,63,66,42,69,88,98,228,381,164,413,572,527,107,610,196,629,171,706,1362,1352,1353,1364,27,47,39,49,88,69,189,72,307,83,58,86,165,90,120,93,57,98,389,112,79,113,39,118,378,151,735,172,121,217,122,220,73,263,768,267,1207,325,216,705,145,962,1133,1386,387,47,136,85,289,123,81,166,366,174,54,199,41,235,1254,375,102,579,321,631,447,709,287,1068,347,1244,759,28,688,32,61,41,110,59,260,65,273,74,51,80,602,111,73,111,123,116,58,144,71,152,788,185,81,227,153,288,999,392,61,393,192,551,16,1097,63,1266,449,1401,28,24,739,28,398,39,427,69,527,69,992,69,1242,74,50,80,512,86,389,184,57,472,73,1092,969,1423,1422,37,597,47,145,59,114,81,63,85,88,91,884,92,602,95,257,147,57,319,81,516,385,574,374,652,57,916,1183,954,143,1131,1029,1421,1018,1,724,26,1224,27,363,28,1454,36,156,40,1199,63,1457,67,61,70,81,72,915,77,462,92,531,94,948,108,41,195,274,232,32,487,63,509,57,526,58,629,1453,653,136,802,57,829,1471,1455,1456,1475,248,19,405,20,81,56,278,59,54,59,87,65,287,72,71,72,377,80,458,88,673,147,315,204,329,217,53,220,128,226,31,330,1360,736,48,885,1491,926,1212,1122,426,1492,414,30,830,31,120,40,57,40,1086,73,51,85,207,90,192,188,1486,302,398,457,49,610,84,707,1494,749,1002,894,183,1053,727,1506,1498,14,37,14,236,86,319,113,112,161,251,174,44,235,170,344,1074,643,354,760,51,1493,1127,15,363,18,18,24,360,35,160,67,570,69,71,70,123,90,321,90,1470,96,121,172,84,199,88,392,103,496,57,629,1515,633,1539,1067,43,1193,733,1337,1540,1405,81,1525,1526,1543,1418,21,16,32,203,40,124,43,184,56,107,58,88,69,242,70,84,111,1341,158,87,158,106,190,87,444,133,1246,556,1294,63,1381,805,1,232,39,41,42,110,51,54,66,57,69,83,69,148,73,50,174,314,211,57,288,121,416,87,457,277,475,1083,495,104,554,820,772,244,887,1091,1069,572,1327,673,1563,1090,1,141,13,46,16,158,19,280,28,30,39,127,47,239,51,81,57,53,59,75,60,145,86,230,86,596,89,535,96,1449,111,255,138,57,198,862,204,73,216,52,443,1017,449,1323,465,17,530,81,558,57,1588,1606,39,64,39,158,41,39,53,814,65,1187,79,1155,107,1501,117,124,144,292,145,63,173,49,177,601,195,46,213,102,289,805,300,1616,395,787,754,350,801,200,1198,1230,1380,83,50,107,57,46,62,58,67,122,67,200,68,209,72,112,101,122,123,57,183,57,186,315,198,58,213,601,267,852,322,57,338,1625,585,114,874,43,1378,200,13,306,20,148,47,170,52,53,52,81,77,112,86,277,90,1603,117,42,204,570,374,107,498,57,560,43,670,1601,799,373,1098,224,1218,377,1263,180,1328,84,1579,1052,24,1388,35,46,45,87,52,242,70,168,71,124,80,164,96,409,98,238,110,108,119,58,220,102,235,78,294,42,302,59,421,814,430,93,470,54,553,183,564,61,698,1326,989,58,1099,404,1343,242,1398,569,1,157,13,1017,18,24,18,1547,21,38,25,120,31,153,69,224,71,39,77,596,86,535,89,216,125,208,151,1479,159,114,227,1696,237,1699,346,1174,358,438,398,1698,424,414,439,102,471,262,530,458,1243,207,1376,922,1425,404,1697,1711,1714,313,1722,436,15,108,31,17,32,215,34,236,45,57,52,107,57,995,61,128,65,1293,80,377,83,66,100,57,148,192,161,528,171,26,327,821,347,42,421,601,563,1458,773,52,790,42,1151,63,1297,200,1555,170,1683,426,1,684,2,5,20,39,47,276,60,53,72,140,85,922,88,1375,111,820,116,44,117,427,146,315,192,141,213,114,294,260,310,57,311,102,330,1757,348,57,394,569,457,908,791,57,994,200,1,371,13,1395,14,481,15,313,30,446,31,54,41,1413,43,314,45,59,50,68,57,385,59,39,70,462,139,93,149,517,161,148,174,653,217,1009,358,93,390,44,561,1619,613,57,732,885,752,1334,802,42,864,57,1015,188,1192,378,1726,1795,1735,43,1801,1006,1,26,27,35,41,188,70,682,80,168,80,176,80,884,84,87,85,1190,86,93,97,209,98,305,101,82,107,1406,118,1082,140,54,201,195,233,47,300,49,318,722,349,238,367,875,394,54,503,481,562,418,1203,250,1762,53,14,1739,15,110,16,436,32,141,51,305,54,289,65,81,70,71,72,851,77,841,98,93,113,1255,116,41,142,988,148,57,161,41,174,50,227,1615,300,57,346,49,350,170,440,57,457,1787,530,54,670,1749,742,57,787,1817,843,300,1336,1776,1644,1445,1782,1779,1831,1833,1840,110,1862,306,1,159,13,542,25,405,25,1737,40,164,44,1822,47,312,52,106,65,83,65,88,65,892,77,377,85,192,86,125,88,130,91,43,95,1292,165,46,170,51,227,581,243,350,310,52,338,1857,383,49,790,51,890,1329,906,714,959,483,1188,136,1229,273,1250,103,1674,1339,1824,531,1,103,1,298,1,398,18,1624,20,236,27,28,41,214,46,181,67,45,69,112,69,603,72,179,72,770,73,102,78,1355,80,1105,85,362,85,410,145,57,196,81,204,83,213,665,405,171,460,185,608,57,849,40,962,568,1240,61,1256,1202,1427,627,1467,1920,1800,209,1900,1924,25,1095,28,919,31,586,38,1650,44,158,45,107,67,239,69,203,72,238,72,1444,72,1557,77,83,86,79,151,53,151,122,284,1715,284,1861,302,1465,400,102,534,942,621,768,756,88,967,1768,1151,456,1477,1934,1948,593,33,260,47,366,57,59,69,107,70,1466,73,61,77,373,85,56,98,165,98,279,98,892,111,1042,140,114,165,117,224,57,227,1830,229,1633,231,879,264,107,333,767,621,415,635,1165,661,57,796,1612,798,114,799,81,826,1428,991,103,993,43,1145,42,1873,119,16,171,44,211,52,43,60,138,63,68,65,63,72,39,77,168,80,83,106,212,111,93,113,759,123,130,123,207,135,45,139,374,142,488,166,743,207,102,357,57,367,185,395,183,398,1988,489,57,622,58,834,1589,854,43,972,2010,1011,200,1029,1090,1452,1870,1545,1129,1659,81,1789,184,1902,2017,1,201,16,13,17,620,24,1129,25,305,41,143,49,87,57,87,59,1935,69,49,69,353,69,438,69,449,72,78,72,332,73,528,78,44,86,238,122,209,130,426,135,40,135,954,140,44,149,87,161,45,168,54,189,102,235,88,293,1149,338,1980,346,114,391,110,406,49,421,783,471,278,536,130,574,238,735,426,776,244,800,2024,819,2062,955,160],"counts":[23837,18203,13541,12730,12287,10786,10606,10546,9843,9673,8730,8684,8463,7526,7297,6563,6515,6357,6114,5973,5478,5404,5202,5181,5176,5173,5140,4940,4884,4702,4693,4666,4587,4490,4407,4079,4022,3922,3900,3891,3703,3686,3660,3635,3605,3584,3512,3357,3219,3065,2829,2746,2740,2713,2636,2568,2392,2385,2375,2345,2304,2132,2125,2089,2048,2016,1962,1955,1947,1927,1890,1864,1850,1837,1816,1800,1763,1733,1710,1676,1638,1627,1610,1598,1545,1496,1478,1438,1436,1415,1379,1373,1353,1350,1347,1347,1330,1325,1313,1312,1303,1299,1293,1263,1261,1256,1254,1238,1209,1202,1178,1147,1127,1124,1120,1098,1092,1056,1051,1042,1008,994,993,990,972,968,966,954,943,912,907,897,895,894,881,877,853,849,830,830,828,811,810,808,800,789,786,786,782,779,771,769,763,751,742,740,740,739,725,709,703,703,693,690,690,686,683,677,675,672,670,665,663,663,661,661,655,642,639,633,628,628,627,624,616,614,609,608,607,599,592,591,591,589,587,586,585,578,577,575,574,569,567,567,563,559,556,554,553,548,548,545,542,534,533,527,527,527,521,518,517,517,516,515,514,510,509,509,509,504,504,503,503,500,500,498,490,489,488,484,484,481,480,478,475,475,473,472,468,467,466,465,464,463,462,462,461,458,457,456,454,454,452,450,450,446,446,446,444,442,442,441,438,435,435,432,429,428,424,418,410,408,406,401,399,397,396,396,396,395,394,393,391,390,390,389,388,387,385,384,381,379,376,374,371,370,365,362,360,359,359,358,357,355,351,348,346,345,344,343,342,340,339,339,338,337,336,336,336,335,335,332,330,329,329,328,327,326,325,320,318,318,312,311,309,309,307,304,302,302,302,300,298,298,297,296,296,296,295,295,294,294,293,293,293,292,290,289,289,289,288,285,284,284,284,284,281,281,280,280,279,278,277,276,276,274,274,273,272,271,271,270,270,269,268,268,267,267,267,266,266,265,265,265,264,264,263,260,256,256,256,255,255,254,254,252,252,252,251,250,250,248,246,245,244,243,243,243,242,242,238,238,236,236,236,235,235,235,235,235,235,234,234,233,233,233,233,232,232,232,232,230,230,230,230,229,229,229,229,229,229,228,228,226,226,225,225,223,223,222,222,219,219,219,218,216,216,216,216,216,215,214,213,212,211,211,210,210,209,209,208,208,207,206,205,205,204,204,203,200,200,200,197,197,197,197,197,196,196,195,193,193,193,193,192,192,192,192,192,192,191,191,191,191,191,191,191,191,191,190,189,188,188,185,185,184,183,183,183,182,182,181,181,181,180,179,178,178,178,178,178,177,177,177,177,177,176,176,176,175,175,175,174,173,173,173,172,172,172,172,172,172,171,171,171,170,170,170,170,169,169,169,168,168,167,167,167,166,165,165,165,164,164,163,163,163,163,163,163,162,162,162,162,162,162,162,162,162,161,161,161,160,160,159,159,159,158,158,158,158,158,158,157,157,157,157,156,155,155,155,154,154,154,153,153,153,153,152,152,152,152,151,151,151,151,151,151,150,150,150,150,150,149,149,149,149,148,148,148,147,147,147,147,147,146,146,146,145,145,145,144,144,144,143,143,143,142,142,141,141,141,141,140,140,140,139,139,138,138,138,138,137,137,137,136,136,136,136,136,135,135,135,134,134,134,134,134,133,133,133,133,133,132,132,132,131,130,130,130,130,130,129,129,129,129,129,129,129,129,129,129,128,128,128,127,127,127,126,126,125,125,125,125,125,125,125,125,125,124,124,124,124,124,124,123,123,123,123,122,122,122,122,122,121,121,121,121,120,120,120,120,120,118,118,118,118,118,118,118,118,118,117,117,117,117,117,117,117,117,117,117,117,117,116,116,116,116,115,115,115,115,115,115,114,114,114,114,114,114,113,113,113,113,113,112,112,112,112,112,112,111,111,111,111,111,111,111,110,110,110,110,110,110,110,110,109,109,108,108,108,108,108,108,108,108,108,107,107,107,107,107,107,107,106,106,106,106,106,105,105,105,105,105,105,105,105,105,105,105,105,105,105,105,105,104,104,104,104,104,104,104,104,104,103,103,103,103,103,102,102,102,102,102,102,102,102,102,101,101,101,101,101,101,101,101,101,101,100,100,100,99,99,99,99,99,99,99,99,99,99,99,99,98,98,98,98,98,98,98,98,98,98,98,97,97,97,97,96,96,96,96,95,95,95,95,95,95,95,95,95,95,95,95,94,94,94,94,94,94,94,94,94,94,93,93,93,93,93,93,93,93,92,92,92,92,91,91,91,91,91,91,91,91,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,89,89,89,89,89,89,89,89,89,88,88,88,88,88,88,88,88,88,88,87,87,87,87,87,87,86,86,86,86,86,86,86,86,86,86,86,86,86,86,86,86,85,85,85,85,85,85,85,85,85,85,85,84,84,84,84,84,84,83,83,83,83,83,83,83,83,83,83,83,83,82,82,82,82,82,82,82,81,81,81,81,81,81,81,81,81,81,81,81,81,81,81,80,80,80,80,80,80,80,80,79,79,79,79,79,78,78,78,78,78,78,78,78,78,78,78,78,78,78,77,77,77,77,77,77,77,76,76,76,76,76,76,75,75,75,75,75,75,75,75,75,75,75,75,75,75,74,74,74,74,74,74,73,73,73,73,73,73,73,73,72,72,72,72,72,72,72,72,72,72,72,72,72,71,71,71,71,71,71,71,71,71,71,71,71,71,70,70,70,70,70,70,70,70,70,70,70,70,70,69,69,69,69,69,69,69,69,69,69,69,69,69,68,68,68,68,68,68,68,68,68,68,68,68,67,67,67,67,67,67,67,67,67,67,67,67,67,67,67,67,67,67,67,67,67,66,66,66,66,66,66,66,66,66,66,66,66,66,65,65,65,65,65,65,65,65,65,65,65,65,65,65,64,64,64,64,64,64,64,64,64,64,64,64,64,64,64,63,63,63,63,63,63,63,63,63,63,63,63,63,63,63,63,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,62,61,61,61,61,61,61,61,61,61,61,61,61,61,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,60,59,59,59,59,59,59,59,59,59,59,59,59,59,58,58,58,58,58,58,58,58,58,58,58,58,58,58,58,58,58,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,55,55,55,55,55,55,55,55,55,55,55,55,55,55,55,55,54,54,54,54,54,54,54,54,54,54,54,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,52,52,52,52,52,52,52,52,52,52,52,52,52,52,52,52,51,51,51,51,51,51,51,51,51,51,51,51,51,51,51,51,51,51,51,51,51,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,49,49,49,49,49,49,49,49,49,49,49,49,49,49,49,49,49,49,49,49,49,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,47,47,47,47,47,47,47,47,47,47,47,47,47,47,47,47,47,47,47,47,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,46,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,44,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,43,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,42,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,41,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,39,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,36,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,35,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34],"after":[1091557,1073354,1059813,1047083,1034796,1024010,1013404,1002858,993015,983342,974612,965928,957465,949939,942642,936079,929564,923207,917093,911120,905642,900238,895036,889855,884679,879506,874366,869426,864542,859840,855147,850481,845894,841404,836997,832918,828896,824974,821074,817183,813480,809794,806134,802499,798894,795310,791798,788441,785222,782157,779328,776582,773842,771129,768493,765925,763533,761148,758773,756428,754124,751992,749867,747778,745730,743714,741752,739797,737850,735923,734033,732169,730319,728482,726666,724866,723103,721370,719660,717984,716346,714719,713109,711511,709966,708470,706992,705554,704118,702703,701324,699951,698598,697248,695901,694554,693224,691899,690586,689274,687971,686672,685379,684116,682855,681599,680345,679107,677898,676696,675518,674371,673244,672120,671000,669902,668810,667754,666703,665661,664653,663659,662666,661676,660704,659736,658770,657816,656873,655961,655054,654157,653262,652368,651487,650610,649757,648908,648078,647248,646420,645609,644799,643991,643191,642402,641616,640830,640048,639269,638498,637729,636966,636215,635473,634733,633993,633254,632529,631820,631117,630414,629721,629031,628341,627655,626972,626295,625620,624948,624278,623613,622950,622287,621626,620965,620310,619668,619029,618396,617768,617140,616513,615889,615273,614659,614050,613442,612835,612236,611644,611053,610462,609873,609286,608700,608115,607537,606960,606385,605811,605242,604675,604108,603545,602986,602430,601876,601323,600775,600227,599682,599140,598606,598073,597546,597019,596492,595971,595453,594936,594419,593903,593388,592874,592364,591855,591346,590837,590333,589829,589326,588823,588323,587823,587325,586835,586346,585858,585374,584890,584409,583929,583451,582976,582501,582028,581556,581088,580621,580155,579690,579226,578763,578301,577839,577378,576920,576463,576007,575553,575099,574647,574197,573747,573301,572855,572409,571965,571523,571081,570640,570202,569767,569332,568900,568471,568043,567619,567201,566791,566383,565977,565576,565177,564780,564384,563988,563592,563197,562803,562410,562019,561629,561239,560850,560462,560075,559690,559306,558925,558546,558170,557796,557425,557055,556690,556328,555968,555609,555250,554892,554535,554180,553829,553481,553135,552790,552446,552103,551761,551421,551082,550743,550405,550068,549732,549396,549060,548725,548390,548058,547728,547399,547070,546742,546415,546089,545764,545444,545126,544808,544496,544185,543876,543567,543260,542956,542654,542352,542050,541750,541452,541154,540857,540561,540265,539969,539674,539379,539085,538791,538498,538205,537912,537620,537330,537041,536752,536463,536175,535890,535606,535322,535038,534754,534473,534192,533912,533632,533353,533075,532798,532522,532246,531972,531698,531425,531153,530882,530611,530341,530071,529802,529534,529266,528999,528732,528465,528199,527933,527668,527403,527138,526874,526610,526347,526087,525831,525575,525319,525064,524809,524555,524301,524049,523797,523545,523294,523044,522794,522546,522300,522055,521811,521568,521325,521082,520840,520598,520360,520122,519886,519650,519414,519179,518944,518709,518474,518239,518004,517770,517536,517303,517070,516837,516604,516372,516140,515908,515676,515446,515216,514986,514756,514527,514298,514069,513840,513611,513382,513154,512926,512700,512474,512249,512024,511801,511578,511356,511134,510915,510696,510477,510259,510043,509827,509611,509395,509179,508964,508750,508537,508325,508114,507903,507693,507483,507274,507065,506857,506649,506442,506236,506031,505826,505622,505418,505215,505015,504815,504615,504418,504221,504024,503827,503630,503434,503238,503043,502850,502657,502464,502271,502079,501887,501695,501503,501311,501119,500928,500737,500546,500355,500164,499973,499782,499591,499400,499210,499021,498833,498645,498460,498275,498091,497908,497725,497542,497360,497178,496997,496816,496635,496455,496276,496098,495920,495742,495564,495386,495209,495032,494855,494678,494501,494325,494149,493973,493798,493623,493448,493274,493101,492928,492755,492583,492411,492239,492067,491895,491723,491552,491381,491210,491040,490870,490700,490530,490361,490192,490023,489855,489687,489520,489353,489186,489020,488855,488690,488525,488361,488197,488034,487871,487708,487545,487382,487219,487057,486895,486733,486571,486409,486247,486085,485923,485761,485600,485439,485278,485118,484958,484799,484640,484481,484323,484165,484007,483849,483691,483533,483376,483219,483062,482905,482749,482594,482439,482284,482130,481976,481822,481669,481516,481363,481210,481058,480906,480754,480602,480451,480300,480149,479998,479847,479696,479546,479396,479246,479096,478946,478797,478648,478499,478350,478202,478054,477906,477759,477612,477465,477318,477171,477025,476879,476733,476588,476443,476298,476154,476010,475866,475723,475580,475437,475295,475153,475012,474871,474730,474589,474449,474309,474169,474030,473891,473753,473615,473477,473339,473202,473065,472928,472792,472656,472520,472384,472248,472113,471978,471843,471709,471575,471441,471307,471173,471040,470907,470774,470641,470508,470376,470244,470112,469981,469851,469721,469591,469461,469331,469202,469073,468944,468815,468686,468557,468428,468299,468170,468041,467913,467785,467657,467530,467403,467276,467150,467024,466899,466774,466649,466524,466399,466274,466149,466024,465899,465775,465651,465527,465403,465279,465155,465032,464909,464786,464663,464541,464419,464297,464175,464053,463932,463811,463690,463569,463449,463329,463209,463089,462969,462851,462733,462615,462497,462379,462261,462143,462025,461907,461790,461673,461556,461439,461322,461205,461088,460971,460854,460737,460620,460503,460387,460271,460155,460039,459924,459809,459694,459579,459464,459349,459235,459121,459007,458893,458779,458665,458552,458439,458326,458213,458100,457988,457876,457764,457652,457540,457428,457317,457206,457095,456984,456873,456762,456651,456541,456431,456321,456211,456101,455991,455881,455771,455662,455553,455445,455337,455229,455121,455013,454905,454797,454689,454581,454474,454367,454260,454153,454046,453939,453832,453726,453620,453514,453408,453302,453197,453092,452987,452882,452777,452672,452567,452462,452357,452252,452147,452042,451937,451832,451727,451622,451518,451414,451310,451206,451102,450998,450894,450790,450686,450583,450480,450377,450274,450171,450069,449967,449865,449763,449661,449559,449457,449355,449253,449152,449051,448950,448849,448748,448647,448546,448445,448344,448243,448143,448043,447943,447844,447745,447646,447547,447448,447349,447250,447151,447052,446953,446854,446755,446657,446559,446461,446363,446265,446167,446069,445971,445873,445775,445677,445580,445483,445386,445289,445193,445097,445001,444905,444810,444715,444620,444525,444430,444335,444240,444145,444050,443955,443860,443765,443671,443577,443483,443389,443295,443201,443107,443013,442919,442825,442732,442639,442546,442453,442360,442267,442174,442081,441989,441897,441805,441713,441622,441531,441440,441349,441258,441167,441076,440985,440895,440805,440715,440625,440535,440445,440355,440265,440175,440085,439995,439905,439815,439725,439635,439546,439457,439368,439279,439190,439101,439012,438923,438834,438746,438658,438570,438482,438394,438306,438218,438130,438042,437954,437867,437780,437693,437606,437519,437432,437346,437260,437174,437088,437002,436916,436830,436744,436658,436572,436486,436400,436314,436228,436142,436056,435971,435886,435801,435716,435631,435546,435461,435376,435291,435206,435121,435037,434953,434869,434785,434701,434617,434534,434451,434368,434285,434202,434119,434036,433953,433870,433787,433704,433621,433539,433457,433375,433293,433211,433129,433047,432966,432885,432804,432723,432642,432561,432480,432399,432318,432237,432156,432075,431994,431913,431832,431752,431672,431592,431512,431432,431352,431272,431192,431113,431034,430955,430876,430797,430719,430641,430563,430485,430407,430329,430251,430173,430095,430017,429939,429861,429783,429705,429628,429551,429474,429397,429320,429243,429166,429090,429014,428938,428862,428786,428710,428635,428560,428485,428410,428335,428260,428185,428110,428035,427960,427885,427810,427735,427660,427586,427512,427438,427364,427290,427216,427143,427070,426997,426924,426851,426778,426705,426632,426560,426488,426416,426344,426272,426200,426128,426056,425984,425912,425840,425768,425696,425625,425554,425483,425412,425341,425270,425199,425128,425057,424986,424915,424844,424773,424703,424633,424563,424493,424423,424353,424283,424213,424143,424073,424003,423933,423863,423794,423725,423656,423587,423518,423449,423380,423311,423242,423173,423104,423035,422966,422898,422830,422762,422694,422626,422558,422490,422422,422354,422286,422218,422150,422083,422016,421949,421882,421815,421748,421681,421614,421547,421480,421413,421346,421279,421212,421145,421078,421011,420944,420877,420810,420743,420677,420611,420545,420479,420413,420347,420281,420215,420149,420083,420017,419951,419885,419820,419755,419690,419625,419560,419495,419430,419365,419300,419235,419170,419105,419040,418975,418911,418847,418783,418719,418655,418591,418527,418463,418399,418335,418271,418207,418143,418079,418015,417952,417889,417826,417763,417700,417637,417574,417511,417448,417385,417322,417259,417196,417133,417070,417007,416945,416883,416821,416759,416697,416635,416573,416511,416449,416387,416325,416263,416201,416139,416077,416015,415953,415891,415829,415767,415705,415643,415582,415521,415460,415399,415338,415277,415216,415155,415094,415033,414972,414911,414850,414790,414730,414670,414610,414550,414490,414430,414370,414310,414250,414190,414130,414070,414010,413950,413890,413830,413770,413710,413650,413590,413531,413472,413413,413354,413295,413236,413177,413118,413059,413000,412941,412882,412823,412765,412707,412649,412591,412533,412475,412417,412359,412301,412243,412185,412127,412069,412011,411953,411895,411837,411780,411723,411666,411609,411552,411495,411438,411381,411324,411267,411210,411153,411096,411039,410982,410925,410868,410811,410754,410697,410640,410583,410526,410469,410412,410356,410300,410244,410188,410132,410076,410020,409964,409908,409852,409796,409740,409684,409628,409572,409516,409460,409404,409348,409292,409236,409181,409126,409071,409016,408961,408906,408851,408796,408741,408686,408631,408576,408521,408466,408411,408356,408302,408248,408194,408140,408086,408032,407978,407924,407870,407816,407762,407709,407656,407603,407550,407497,407444,407391,407338,407285,407232,407179,407126,407073,407020,406967,406914,406861,406808,406755,406702,406649,406596,406544,406492,406440,406388,406336,406284,406232,406180,406128,406076,406024,405972,405920,405868,405816,405764,405713,405662,405611,405560,405509,405458,405407,405356,405305,405254,405203,405152,405101,405050,404999,404948,404897,404846,404795,404744,404693,404643,404593,404543,404493,404443,404393,404343,404293,404243,404193,404143,404093,404043,403993,403943,403893,403843,403793,403743,403693,403643,403593,403543,403493,403443,403393,403344,403295,403246,403197,403148,403099,403050,403001,402952,402903,402854,402805,402756,402707,402658,402609,402560,402511,402462,402413,402364,402316,402268,402220,402172,402124,402076,402028,401980,401932,401884,401836,401788,401740,401692,401644,401596,401548,401500,401452,401405,401358,401311,401264,401217,401170,401123,401076,401029,400982,400935,400888,400841,400794,400747,400700,400653,400606,400559,400512,400466,400420,400374,400328,400282,400236,400190,400144,400098,400052,400006,399960,399914,399868,399822,399776,399730,399684,399638,399592,399546,399500,399454,399408,399362,399317,399272,399227,399182,399137,399092,399047,399002,398957,398912,398867,398822,398777,398732,398687,398642,398597,398552,398507,398462,398417,398372,398327,398282,398237,398192,398147,398102,398057,398012,397968,397924,397880,397836,397792,397748,397704,397660,397616,397572,397528,397484,397440,397396,397352,397308,397264,397220,397176,397132,397088,397044,397000,396956,396912,396869,396826,396783,396740,396697,396654,396611,396568,396525,396482,396439,396396,396353,396310,396267,396224,396181,396138,396095,396052,396009,395966,395923,395881,395839,395797,395755,395713,395671,395629,395587,395545,395503,395461,395419,395377,395335,395293,395251,395209,395167,395125,395083,395041,394999,394957,394915,394873,394831,394789,394747,394705,394663,394621,394580,394539,394498,394457,394416,394375,394334,394293,394252,394211,394170,394129,394088,394047,394006,393965,393924,393883,393842,393801,393760,393719,393678,393637,393596,393555,393514,393474,393434,393394,393354,393314,393274,393234,393194,393154,393114,393074,393034,392994,392954,392914,392874,392834,392794,392754,392714,392674,392634,392594,392554,392514,392474,392434,392394,392354,392314,392274,392234,392194,392154,392115,392076,392037,391998,391959,391920,391881,391842,391803,391764,391725,391686,391647,391608,391569,391530,391491,391452,391413,391374,391335,391296,391257,391218,391179,391140,391101,391062,391023,390984,390945,390906,390867,390829,390791,390753,390715,390677,390639,390601,390563,390525,390487,390449,390411,390373,390335,390297,390259,390221,390183,390145,390107,390069,390031,389993,389955,389917,389879,389841,389803,389765,389727,389689,389651,389613,389576,389539,389502,389465,389428,389391,389354,389317,389280,389243,389206,389169,389132,389095,389058,389021,388984,388947,388910,388873,388836,388799,388762,388725,388688,388651,388615,388579,388543,388507,388471,388435,388399,388363,388327,388291,388255,388219,388183,388147,388111,388075,388039,388003,387967,387931,387895,387859,387823,387787,387751,387715,387679,387643,387607,387571,387535,387500,387465,387430,387395,387360,387325,387290,387255,387220,387185,387150,387115,387080,387045,387010,386975,386940,386905,386870,386835,386800,386765,386730,386695,386660,386625,386590,386555,386520,386485,386450,386415,386380,386345,386310,386276,386242,386208,386174,386140,386106,386072,386038,386004,385970,385936,385902,385868,385834,385800,385766,385732,385698,385664,385630,385596,385562,385528,385494,385460,385426,385392,385358,385324,385290,385256,385222,385188,385154,385120,385086,385052,385018,384984,384950,384916,384882],"stats":{"chars":1115394,"base":65,"chunks":15056,"merges":2000,"vocab":2065,"tokens_final":384882,"chars_per_token_final":2.898,"first_count":23837,"last_count":34,"longest_token":"NORTHUMBERLAND","longest_step":1482,"word_like_tokens":1994,"seconds":3.1}}</script>
+<script>
+(() => {
+"use strict";
+const M = JSON.parse(document.getElementById("model").textContent);
+const S = M.stats;
+
+/* ---------- tokenizer: the whole thing ---------- */
+const BASE = Array.from(M.base), NB = BASE.length, N = M.merges.length / 2;
+const L = new Int32Array(N), R = new Int32Array(N), rank = new Map(), cid = new Map();
+BASE.forEach((c, i) => cid.set(c, i));
+const vocab = BASE.slice();
+for (let r = 0; r < N; r++) {
+  L[r] = M.merges[2 * r]; R[r] = M.merges[2 * r + 1];
+  rank.set(L[r] * 8192 + R[r], r);
+  vocab.push(vocab[L[r]] + vocab[R[r]]);
+}
+const RE = new RegExp(M.pattern, "gu");
+function encode(text, k) {
+  const ids = [], strs = [];
+  for (const m of text.matchAll(RE)) {
+    let sym = [], s = [];
+    for (const c of m[0]) { sym.push(cid.has(c) ? cid.get(c) : -1); s.push(c); }
+    while (sym.length > 1) {
+      let br = -1;
+      for (let i = 0; i < sym.length - 1; i++) {
+        if (sym[i] < 0 || sym[i + 1] < 0) continue;
+        const r = rank.get(sym[i] * 8192 + sym[i + 1]);
+        if (r !== undefined && r < k && (br < 0 || r < br)) br = r;
+      }
+      if (br < 0) break;
+      const a = L[br], b = R[br], nw = NB + br, os = [], oc = [];
+      for (let i = 0; i < sym.length; i++) {
+        if (i < sym.length - 1 && sym[i] === a && sym[i + 1] === b) { os.push(nw); oc.push(s[i] + s[i + 1]); i++; }
+        else { os.push(sym[i]); oc.push(s[i]); }
+      }
+      sym = os; s = oc;
+    }
+    for (let i = 0; i < sym.length; i++) { ids.push(sym[i]); strs.push(s[i]); }
+  }
+  return { ids, strs };
+}
+window.BPE = { encode, vocab, N, NB };
+
+/* ---------- helpers ---------- */
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => n.toLocaleString("en-US");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+function hue(id) { return (id * 137.508 + 25) % 360; }
+function bg(id) { return id < 0 ? "transparent" : `hsl(${hue(id).toFixed(1)} 24% 21%)`; }
+function fg(id) { return id < 0 ? "#8e8e8e" : `hsl(${hue(id).toFixed(1)} 48% 85%)`; }
+const SHOW = { " ": "·", "\n": "↵", "\t": "⇥", "\r": "␍" };
+function vis(str) {           // safe HTML with visible whitespace
+  let h = "";
+  for (const c of str) {
+    if (SHOW[c]) h += `<span class="ws">${SHOW[c]}</span>`;
+    else h += c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : c;
+  }
+  return h;
+}
+function plain(str) { let o = ""; for (const c of str) o += SHOW[c] || c; return o; }
+function miniPill(id, str) {
+  return `<span class="mp${id < 0 ? " unk" : ""}" style="--c:${bg(id)};--t:${fg(id)}">${vis(str)}</span>`;
+}
+function describe(id) {
+  if (id < 0) return "not in the training text";
+  if (id < NB) return "base character";
+  const r = id - NB;
+  return `merge ${fmt(r + 1)}: ${plain(vocab[L[r]])} + ${plain(vocab[R[r]])}`;
+}
+const corpusRatio = (k) => (k === 0 ? 1 : S.chars / M.after[k - 1]);
+
+/* ---------- static numbers ---------- */
+const statText = { merges: fmt(S.merges), chars: fmt(S.chars), base: fmt(S.base), chunks: fmt(S.chunks),
+  vocab: fmt(S.vocab), first_count: fmt(S.first_count), last_count: fmt(S.last_count), tokens_final: fmt(S.tokens_final),
+  cpt: S.chars_per_token_final.toFixed(2),
+  seconds: String(Math.round(S.seconds)), longest_step: fmt(S.longest_step) };
+document.querySelectorAll("[data-stat]").forEach((el) => { el.textContent = statText[el.dataset.stat]; });
+$("pattern").textContent = M.pattern;
+const theId = vocab.indexOf(" the");
+$("the-step").textContent = fmt(theId - NB + 1);
+$("the-count").textContent = fmt(M.counts[theId - NB]);
+document.querySelectorAll(".ex").forEach((el) => {
+  const t = encode(el.dataset.ex, N);
+  el.innerHTML = t.ids.map((id, i) => miniPill(id, t.strs[i])).join("");
+  el.setAttribute("aria-label", `“${el.dataset.ex}” as tokens: ${t.strs.map(plain).join(" | ")}`);
+  el.setAttribute("role", "img");
+});
+
+/* ---------- presets ---------- */
+const PRESETS = {
+  mix: "Now is the winter of our discontent\nmade glorious summer by this sun of York.\nThe tokenizer streams GPU benchmarks overnight.",
+  bard: "First Citizen:\nBefore we proceed any further, hear me speak.\n\nAll:\nSpeak, speak.\n\nFirst Citizen:\nYou are all resolved rather to die than to famish?",
+  modern: "Send me the GPU numbers by Friday; the new checkpoint looks promising, and the smartphone demo finally works.",
+  code: "def mean(xs):\n    total = 0\n    for x in xs:\n        total += x\n    return total / len(xs)",
+  unseen: "Café au lait, naïve résumé 🙂 — 東京 is two characters.",
+};
+
+/* ---------- state ---------- */
+const input = $("input"), range = $("step"), view = $("tokens");
+range.max = N;
+let k = 12, prev = null, cur = -1, playing = null;
+const RENDER_CAP = 3000;
+
+function fit() { input.style.height = "auto"; input.style.height = Math.min(340, input.scrollHeight + 2) + "px"; }
+addEventListener("resize", fit);
+function setPressed() {
+  document.querySelectorAll("[data-preset]").forEach((b) =>
+    b.setAttribute("aria-pressed", String(PRESETS[b.dataset.preset] === input.value)));
+}
+
+/* ---------- token view, with fusing animation ---------- */
+function renderTokens(animate) {
+  const text = input.value;
+  const { ids, strs } = encode(text, k);
+  // char offsets (code points) of each token
+  const starts = []; let off = 0;
+  for (const s of strs) { starts.push(off); off += Array.from(s).length; }
+  const total = off;
+  const oldStart = new Map();         // start offset -> id, from previous render
+  if (prev) prev.starts.forEach((st, i) => oldStart.set(st, prev.ids[i]));
+  const oldKeys = prev ? prev.els : new Map();
+  const els = new Map();
+  const frag = document.createDocumentFragment();
+  const doAnim = animate && !reduced.matches && prev && prev.text === text;
+  let shown = 0, fused = 0;
+  for (let i = 0; i < ids.length && shown < RENDER_CAP; i++) {
+    const id = ids[i], str = strs[i], st = starts[i], chars = Array.from(str);
+    shown += chars.length;
+    const key = st + ":" + id;
+    let el = oldKeys.get(key);
+    if (!el || !doAnim) {
+      el = document.createElement("span");
+      el.className = "tk" + (id < 0 ? " unk" : "");
+      el.dataset.i = i;
+      el.style.setProperty("--c", bg(id)); el.style.setProperty("--t", fg(id));
+      // segments: split at the previous render's token boundaries
+      const cuts = [0];
+      if (doAnim) for (let j = 1; j < chars.length; j++) if (oldStart.has(st + j)) cuts.push(j);
+      cuts.push(chars.length);
+      const segs = [];
+      for (let j = 0; j < cuts.length - 1; j++) {
+        const sg = document.createElement("span");
+        sg.className = "sg";
+        sg.innerHTML = vis(chars.slice(cuts[j], cuts[j + 1]).join(""));
+        el.appendChild(sg); segs.push([sg, oldStart.get(st + cuts[j])]);
+      }
+      if (doAnim && segs.length > 1 && fused < 400) {
+        fused++;
+        segs.forEach(([sg, oid], j) => {
+          const r = 6;
+          const from = { backgroundColor: bg(oid), color: fg(oid), marginLeft: j ? "4px" : "0px",
+            borderTopLeftRadius: r + "px", borderBottomLeftRadius: r + "px",
+            borderTopRightRadius: r + "px", borderBottomRightRadius: r + "px",
+            paddingLeft: "5px", paddingRight: "5px" };
+          const to = { backgroundColor: bg(id), color: fg(id), marginLeft: "0px",
+            borderTopLeftRadius: (j === 0 ? r : 0) + "px", borderBottomLeftRadius: (j === 0 ? r : 0) + "px",
+            borderTopRightRadius: (j === segs.length - 1 ? r : 0) + "px", borderBottomRightRadius: (j === segs.length - 1 ? r : 0) + "px",
+            paddingLeft: (j === 0 ? 5 : 0) + "px", paddingRight: (j === segs.length - 1 ? 5 : 0) + "px" };
+          sg.animate([from, from, to], { duration: 560, easing: "cubic-bezier(.3,.7,.2,1)", fill: "none" });
+        });
+      } else if (doAnim) {             // a piece that split off when scrubbing back
+        el.animate([{ opacity: .35 }, { opacity: 1 }], { duration: 260 });
+      }
+    }
+    el.dataset.i = i;
+    el.classList.toggle("cur", i === cur);
+    els.set(key, el);
+    frag.appendChild(el);
+    const nl = (str.match(/\n/g) || []).length;
+    for (let j = 0; j < nl; j++) frag.appendChild(document.createElement("br"));
+  }
+  if (shown < total) {
+    const more = document.createElement("span");
+    more.className = "more";
+    more.textContent = `… ${fmt(total - shown)} more characters counted but not drawn`;
+    frag.appendChild(more);
+  }
+  view.replaceChildren(frag);
+  prev = { text, ids, strs, starts, els };
+  return { ids, strs, total };
+}
+
+/* ---------- side list ---------- */
+const ROWS = 13;
+function renderList(present) {
+  let lo = Math.max(1, k - 6);
+  let hi = Math.min(N, lo + ROWS - 1);
+  lo = Math.max(1, hi - ROWS + 1);
+  let h = "";
+  for (let s = lo; s <= hi; s++) {
+    const r = s - 1, id = NB + r;
+    const cls = s === k ? "current" : s > k ? "future" : "";
+    const seen = s <= k && present.has(id) ? " seen" : "";
+    h += `<li><button data-s="${s}" class="${cls}" aria-label="Go to merge ${s}: ${plain(vocab[L[r]])} plus ${plain(vocab[R[r]])} gives ${plain(vocab[id])}, pair count ${M.counts[r]}"${s === k ? ' aria-current="step"' : ""}>` +
+      `<span class="num">${fmt(s)}</span>` +
+      `<span class="pair${seen}">${miniPill(L[r], vocab[L[r]])}<span class="op">+</span>${miniPill(R[r], vocab[R[r]])}<span class="op">→</span>${miniPill(id, vocab[id])}</span>` +
+      `<span class="cnt">${fmt(M.counts[r])}</span></button></li>`;
+  }
+  const focused = document.activeElement && document.activeElement.closest("#list") ? document.activeElement.dataset.s : null;
+  $("list").innerHTML = h;
+  if (focused) { const b = $("list").querySelector(`[data-s="${focused}"]`) || $("list").querySelector(".current"); if (b) b.focus(); }
+}
+
+/* ---------- curve ---------- */
+const YMAX = Math.ceil(S.chars_per_token_final * 2) / 2;   // headroom to the next half
+(function drawCurve() {
+  let d = "";
+  for (let s = 0; s <= N; s += (s < 100 ? 1 : 5)) {
+    const x = (s / N) * 1000, y = 100 - ((corpusRatio(s) - 1) / (YMAX - 1)) * 100;
+    d += (d ? "L" : "M") + x.toFixed(2) + " " + y.toFixed(2);
+  }
+  const x = 1000, y = 100 - ((corpusRatio(N) - 1) / (YMAX - 1)) * 100;
+  d += "L" + x + " " + y.toFixed(2);
+  $("curve").setAttribute("d", d);
+  $("ytop").textContent = YMAX.toFixed(2);
+})();
+function renderCurve() {
+  const px = (k / N) * 100, py = ((corpusRatio(k) - 1) / (YMAX - 1)) * 100;
+  $("dot").style.left = px + "%"; $("dot").style.top = (100 - py) + "%";
+  $("vline").style.left = px + "%";
+  const toks = k === 0 ? S.chars : M.after[k - 1];
+  $("curve-note").innerHTML = `${fmt(S.chars)} characters → <b>${fmt(toks)}</b> tokens at this step`;
+}
+
+/* ---------- everything ---------- */
+let srTimer = 0;
+function update(animate) {
+  fit();
+  range.value = k;
+  range.style.setProperty("--p", (k / N) * 100 + "%");
+  range.setAttribute("aria-valuetext", `${k} of ${N} merges applied`);
+  $("stepnum").textContent = fmt(k);
+  $("tokens-label").textContent = k === 0 ? "Tokens · single characters" : `Tokens after ${fmt(k)} merge${k === 1 ? "" : "s"}`;
+  const { ids, total } = renderTokens(animate);
+  const ratio = ids.length ? total / ids.length : 0;
+  $("r-chars").textContent = fmt(total);
+  $("r-toks").textContent = fmt(ids.length);
+  $("r-ratio").textContent = ids.length ? ratio.toFixed(2) : "–";
+  $("r-compare").innerHTML = `Shakespeare at this step: <b>${corpusRatio(k).toFixed(2)}</b> chars / token`;
+  if (k === 0) $("now").innerHTML = "No merges yet. Every character is its own token.";
+  else {
+    const r = k - 1;
+    $("now").innerHTML = `Merge ${fmt(k)} fused ${miniPill(L[r], vocab[L[r]])}<span class="op">+</span>${miniPill(R[r], vocab[R[r]])}<span class="op">→</span>${miniPill(NB + r, vocab[NB + r])}` +
+      ` · pair seen <b>${fmt(M.counts[r])}</b> times`;
+  }
+  renderList(new Set(ids));
+  renderCurve();
+  if (cur >= ids.length) cur = -1;
+  showInfo(cur);
+  clearTimeout(srTimer);
+  srTimer = setTimeout(() => {
+    $("readout-sr").textContent = `${fmt(k)} merges: ${fmt(total)} characters, ${fmt(ids.length)} tokens, ${ids.length ? ratio.toFixed(2) : 0} characters per token.`;
+  }, 500);
+}
+function showInfo(i) {
+  if (!prev || i < 0 || i >= prev.ids.length) { $("info").innerHTML = (matchMedia("(hover: none)").matches ? "Tap" : "Hover") + " a token to see where it came from"; return; }
+  const id = prev.ids[i];
+  $("info").innerHTML = `<b>${vis(prev.strs[i]).replace(/<span class="ws">/g, '<span class="ws" style="opacity:.6">')}</b> · ${id < 0 ? "" : "id " + id + " · "}${describe(id)}`;
+}
+function setK(v, animate = true) {
+  v = Math.max(0, Math.min(N, v | 0));
+  if (v === k) return;
+  k = v; update(animate);
+}
+
+/* events */
+range.addEventListener("input", () => { stop(); setK(+range.value); });
+$("prev").addEventListener("click", () => { stop(); setK(k - 1); });
+$("next").addEventListener("click", () => { stop(); setK(k + 1); });
+$("list").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { stop(); setK(+b.dataset.s); } });
+input.addEventListener("input", () => { cur = -1; setPressed(); update(false); });
+document.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => {
+  input.value = PRESETS[b.dataset.preset]; cur = -1; setPressed(); update(false);
+}));
+view.addEventListener("mouseover", (e) => {
+  const t = e.target.closest(".tk"); if (!t) return;
+  view.querySelectorAll(".tk.hl").forEach((x) => x.classList.remove("hl"));
+  t.classList.add("hl"); showInfo(+t.dataset.i);
+});
+view.addEventListener("click", (e) => { const t = e.target.closest(".tk"); if (t) showInfo(+t.dataset.i); });
+view.addEventListener("mouseleave", () => { view.querySelectorAll(".tk.hl").forEach((x) => x.classList.remove("hl")); showInfo(cur); });
+view.addEventListener("keydown", (e) => {
+  if (!prev || !prev.ids.length) return;
+  const last = view.querySelectorAll(".tk").length - 1;
+  let n = cur;
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") n = Math.min(last, cur + 1);
+  else if (e.key === "ArrowLeft" || e.key === "ArrowUp") n = Math.max(0, cur < 0 ? 0 : cur - 1);
+  else if (e.key === "Home") n = 0;
+  else if (e.key === "End") n = last;
+  else if (e.key === "Escape") n = -1;
+  else return;
+  e.preventDefault();
+  cur = n;
+  view.querySelectorAll(".tk").forEach((x) => x.classList.toggle("cur", +x.dataset.i === cur));
+  const c = view.querySelector(".tk.cur"); if (c) c.scrollIntoView({ block: "nearest" });
+  showInfo(cur);
+});
+view.addEventListener("blur", () => { cur = -1; view.querySelectorAll(".tk.cur").forEach((x) => x.classList.remove("cur")); showInfo(-1); });
+
+/* play: slow through the early merges, faster later */
+function stop() { if (playing) { clearTimeout(playing); playing = null; $("play").setAttribute("aria-pressed", "false"); $("play").textContent = "Play"; } }
+function tick() {
+  if (k >= N) { stop(); return; }
+  const d = k < 40 ? 1 : k < 200 ? 3 : k < 800 ? 8 : 20;
+  setK(k + d);
+  playing = setTimeout(tick, k < 40 ? 420 : 110);
+}
+$("play").addEventListener("click", () => {
+  if (playing) { stop(); return; }
+  if (k >= N) setK(0, false);
+  $("play").setAttribute("aria-pressed", "true"); $("play").textContent = "Pause";
+  playing = setTimeout(tick, 80);
+});
+
+input.value = PRESETS.mix;
+setPressed();
+update(false);
+})();
+</script>
+</body>
+</html>
