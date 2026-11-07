@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>How a model reads</title>
 <meta name="description" content="Byte-pair encoding learned from scratch on tiny-shakespeare, shown merge by merge.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,17 +24,26 @@ body{margin:0;background:var(--bg);color:var(--fg);font:400 15px/1.6 var(--sans)
   font-variant-numeric:tabular-nums}
 a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:3px}
 a:hover{text-decoration-color:var(--accent)}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.wrap{max-width:1200px;margin:0 auto;padding:64px 40px 48px}
+.wrap{max-width:1160px;margin:0;padding:28px max(32px,env(safe-area-inset-right)) 56px max(32px,env(safe-area-inset-left))}
 
 /* header */
-.kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 18px}
-h1{font:italic 400 52px/1.05 var(--serif);letter-spacing:-.015em;margin:0 0 20px}
+.kicker{font-size:11px;line-height:1.7;letter-spacing:.04em;color:var(--mute);margin:0 0 6px;text-align:right}
+h1{font:italic 400 30px/1.1 var(--serif);letter-spacing:-.01em;margin:0 0 12px}
 h2{font:italic 400 24px/1.2 var(--serif);margin:0 0 14px;letter-spacing:-.005em}
-.lede{max-width:640px;margin:0;color:var(--dim);font-size:16px;line-height:1.65}
+h2#how{scroll-margin-top:53px}
+.lede{max-width:480px;margin:0;color:var(--dim);font-size:13px;line-height:1.62}
 .lede b{color:var(--fg);font-weight:500}
-header{margin-bottom:48px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:56px;align-items:end}
+header{margin-bottom:28px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:56px;align-items:start}
+.meta{font-size:11px;line-height:1.7;letter-spacing:.04em}
+.meta{text-align:right}
+.made{position:relative;display:inline-block;margin-top:8px;color:var(--mute);text-decoration:underline;text-decoration-color:#2e2e2e;text-underline-offset:3px;transition:color .25s}
+.made:hover{color:var(--fg)}
+.made::after{content:"";position:absolute;inset:-13px -8px}   /* 44px tap area, no layout change */
+.lede .go{position:relative;color:inherit;text-decoration-color:#3a3a3a}
+.lede .go::after{content:"";position:absolute;inset:-14px -6px}
+#scrub{scroll-margin-top:12px}
 .card{margin:0;border-top:1px solid var(--line)}
 .card div{display:flex;justify-content:space-between;gap:12px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13px}
 .card dt{color:var(--mute)}
@@ -46,9 +55,9 @@ header{margin-bottom:48px;display:grid;grid-template-columns:minmax(0,1fr) 320px
 .label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
 .presets{display:flex;gap:4px;flex-wrap:wrap}
-.chip{font:500 12px/1 var(--sans);color:var(--dim);background:none;border:1px solid var(--line);padding:7px 11px;border-radius:999px;cursor:pointer;transition:color .2s,border-color .2s,background .2s}
-.chip:hover{color:var(--fg);border-color:var(--faint)}
-.chip[aria-pressed="true"]{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.chip{font:500 12px/1 var(--sans);color:var(--dim);background:none;border:0;padding:8px 11px;border-radius:999px;cursor:pointer;transition:color .2s,background .2s}
+.chip:hover{color:var(--fg)}
+.chip[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft)}
 textarea{display:block;width:100%;min-height:80px;max-height:340px;resize:none;overflow-y:auto;background:var(--panel);color:var(--fg);border:1px solid var(--line);
   border-radius:10px;padding:14px 16px;font:400 15px/1.6 var(--sans);caret-color:var(--accent);transition:border-color .2s}
 textarea:focus{outline:none;border-color:var(--accent-line)}
@@ -83,9 +92,12 @@ textarea:focus{outline:none;border-color:var(--accent-line)}
 .stepnum{font:italic 400 40px/1 var(--serif)}
 .stepnum small{font:400 14px/1 var(--sans);font-style:normal;color:var(--dim);margin-left:8px}
 .btns{display:flex;gap:6px}
-.btn{font:500 13px/1 var(--sans);color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;cursor:pointer;min-width:40px;transition:border-color .2s,color .2s}
-.btn:hover{border-color:var(--faint)}
-.btn[aria-pressed="true"]{color:var(--accent);border-color:var(--accent-line)}
+/* one filled primary (Play); the arrows are outlined secondaries */
+.btn{font:500 13px/1 var(--sans);letter-spacing:.02em;color:var(--dim);background:none;border:0;box-shadow:inset 0 0 0 1px #2a2a2a;border-radius:999px;padding:11px 18px;cursor:pointer;min-width:40px;transition:color .2s,background .2s,box-shadow .2s,opacity .2s}
+.btn:hover{color:var(--fg);box-shadow:inset 0 0 0 1px #4a4a4a}
+#play{color:#000;background:var(--accent);box-shadow:none;min-width:76px}
+#play:hover{opacity:.88}
+#play[aria-pressed="true"]{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;margin:18px 0 6px;background:transparent;cursor:pointer}
 input[type=range]:focus-visible{outline:none}
 input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 1px var(--accent),0 0 0 6px rgba(242,196,109,.28)}
@@ -146,18 +158,24 @@ code{font:400 12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;co
 
 footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);font-size:12.5px;color:var(--mute);line-height:1.8;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
 footer p{margin:0;max-width:760px}
-.credit{color:#4a4a4a}
+.panel .credit{margin:14px 0 0;padding-top:10px;border-top:1px solid #161616;font:italic 400 12.5px/1.4 var(--serif);color:#8e8e8e}
 
 @media (max-width: 980px){
   .grid{grid-template-columns:1fr;gap:44px}
   header{grid-template-columns:1fr;gap:32px}
   aside{position:static}
   .lower{grid-template-columns:1fr}
+  .kicker,.made,.meta{text-align:left}
+}
+@media (max-width: 720px){
+  .wrap{padding:18px max(16px,env(safe-area-inset-right)) 40px max(16px,env(safe-area-inset-left))}
+  h1{font-size:25px;margin-bottom:8px}
+  .lede{font-size:12.5px;line-height:1.55;max-width:none}
+  .meta{font-size:11px}
+  textarea{font-size:16px}   /* 16px: iOS Safari does not zoom the page on focus */
+  .btn{padding:10px 13px;font-size:12.5px}
 }
 @media (max-width: 600px){
-  .wrap{padding:40px 16px 36px}
-  h1{font-size:38px}
-  .lede{font-size:15px}
   .readout{grid-template-columns:repeat(3,1fr);gap:14px 12px}
   .stat .n{font-size:24px}
   .compare{grid-column:1 / -1;text-align:left}
@@ -166,11 +184,45 @@ footer p{margin:0;max-width:760px}
   .panel{padding:22px 18px}
   #list button{grid-template-columns:40px 1fr auto}
   .lower{margin-top:56px}
-  header{gap:26px;margin-bottom:36px}
+  header{gap:22px;margin-bottom:24px}
+  .kicker{display:none}   /* the lede already says it */
   .xmid{display:none}
   .card{display:grid;grid-template-columns:repeat(3,1fr);border-top:0;gap:14px 10px}
   .card div{flex-direction:column-reverse;justify-content:flex-end;gap:3px;padding:0;border:0;font-size:11px;line-height:1.35}
   .card dd{font-size:14px;font-weight:500}
+  /* three cells, not six, so the text box starts on the first screen (the other three numbers are in the lede, the curve and How it works) */
+  .card div:nth-child(2),.card div:nth-child(4),.card div:nth-child(5){display:none}
+}
+/* phones, and phones on their side: the merge slider comes straight after the text box, above the tokens it
+   changes, so dragging it keeps the tokens in view; the example chips stay on one scrolling row */
+@media (max-width: 720px), (max-height: 500px) and (orientation: landscape){
+  /* the merge slider comes straight after the text box, above the tokens it changes: dragging it, the tokens stay in view */
+  main{display:flex;flex-direction:column;min-width:0}
+  main > .row:first-child{order:1}
+  main > textarea{order:2}
+  .scrub{order:3;margin-top:16px;padding-top:14px}
+  .presets{flex:1 1 100%;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}   /* one row; the last chip, cut at the edge, says it scrolls */
+  .presets::-webkit-scrollbar{display:none}
+  .chip{flex:none}
+  .tokens-head{order:4;margin-top:22px}
+  #tokens{order:5}
+  .readout{order:6}
+  .curve{order:7}
+}
+/* short landscape: the stats card becomes one row of six, as the phone's row of three */
+@media (max-height: 500px) and (orientation: landscape){
+  .kicker{display:none}
+  header{gap:20px;margin-bottom:24px}
+  .card{display:grid;grid-template-columns:repeat(6,1fr);border-top:0;gap:10px}
+  .card div{flex-direction:column-reverse;justify-content:flex-end;gap:3px;padding:0;border:0;font-size:11px;line-height:1.35}
+  .card dd{font-size:14px;font-weight:500}
+}
+/* touch: taller chips and arrow buttons */
+@media (pointer:coarse){
+  .chip{min-height:36px}
+  .btn{min-width:44px;min-height:40px}
+  .btns .btn{position:relative}
+  .btns .btn::after{content:"";position:absolute;inset:-2px 0}
 }
 @media (prefers-reduced-motion: reduce){
   *{transition:none !important;animation:none !important}
@@ -181,13 +233,14 @@ footer p{margin:0;max-width:760px}
 <div class="wrap">
 <header>
   <div>
-  <p class="kicker">Byte-pair encoding · trained from scratch</p>
   <h1>How a model reads</h1>
   <p class="lede">Before a language model sees a sentence, a tokenizer cuts it into pieces. Byte-pair encoding learns those pieces by counting:
   it finds the most frequent pair of neighbouring symbols, fuses it into one new symbol, and repeats.
   This one is character-level and learned <b data-stat="merges"></b> merges from <b data-stat="chars"></b> characters of Shakespeare.
-  Drag the slider to watch the pieces grow.</p>
+  <span class="wide">Drag <a class="go" href="#scrub">the slider</a> to watch the pieces grow.</span></p>
   </div>
+  <div class="meta">
+  <p class="kicker">Byte-pair encoding · trained from scratch</p>
   <dl class="card" aria-label="Training log summary">
     <div><dt>Base characters</dt><dd data-stat="base"></dd></div>
     <div><dt>Merges learned</dt><dd data-stat="merges"></dd></div>
@@ -196,6 +249,8 @@ footer p{margin:0;max-width:760px}
     <div><dt>Training text, in tokens</dt><dd><span data-stat="chars"></span> → <span data-stat="tokens_final"></span></dd></div>
     <div><dt>Chars per token, at the end</dt><dd class="acc" data-stat="cpt"></dd></div>
   </dl>
+  <a class="made" href="#how">How it works</a>
+  </div>
 </header>
 
 <div class="grid">
@@ -227,7 +282,7 @@ footer p{margin:0;max-width:760px}
   </div>
   <p class="sr" id="readout-sr" aria-live="polite"></p>
 
-  <section class="scrub" aria-label="Merge step">
+  <section class="scrub" id="scrub" aria-label="Merge step">
     <div class="scrub-top">
       <div class="stepnum"><span id="stepnum">0</span><small>of <span data-stat="merges"></span> merges applied</small></div>
       <div class="btns">
@@ -267,7 +322,7 @@ footer p{margin:0;max-width:760px}
   <section class="panel" aria-labelledby="how">
     <h2 id="how">How it works</h2>
     <ol>
-      <li><b>Pre-split.</b> The text is cut into chunks: a word with its leading space, a run of digits, a run of punctuation, or whitespace.
+      <li><b>Pre-split.</b> The text is cut into chunks, a simplified version of GPT-2’s rule (Radford et al., 2019): a word with its leading space, a run of digits, a run of punctuation, or whitespace.
         Merges never cross a chunk edge, so <span class="ex" data-ex=" the" data-k="all"></span> can exist but a token spanning two words cannot.
         The rule is one regular expression: <code id="pattern"></code></li>
       <li><b>Start from characters.</b> Every distinct character in tiny-shakespeare is a token. There are <span data-stat="base"></span>.
@@ -278,6 +333,7 @@ footer p{margin:0;max-width:760px}
         The slider simply limits which merges are allowed. Characters never seen in training have no merges, so they stay alone.</li>
       <li><b>Check.</b> The tokenizer on this page is a few dozen lines of JavaScript reading the exported merge list. On a test set of training lines, new sentences, code and unusual characters, its output equals the Python trainer's token for token.</li>
     </ol>
+    <p class="credit">Built with Claude for Joe Gao.</p>
   </section>
 
   <section class="panel" aria-labelledby="not">
@@ -287,11 +343,11 @@ footer p{margin:0;max-width:760px}
         <span class="ex" data-ex=" t" data-k="all"></span> and <span class="ex" data-ex="he" data-k="all"></span> sat next to each other <span id="the-count"></span> times. Frequency is the only signal.</li>
       <li><b>Its pieces depend on the training text.</b> The script format repeats speaker names, so <span class="ex" data-ex="NORTHUMBERLAND" data-k="all"></span> is a single token
         (merge <span data-stat="longest_step"></span>), while a modern word falls apart: <span class="ex" data-ex="smartphone" data-k="all"></span>.
-        Trained on other text, the same word would split differently.</li>
+        Trained on other text, the same word would likely split differently.</li>
       <li><b>It does not know two spellings are one word.</b> <span class="ex" data-ex="the" data-k="all"></span>, <span class="ex" data-ex=" the" data-k="all"></span>,
         <span class="ex" data-ex="The" data-k="all"></span> and <span class="ex" data-ex="THE" data-k="all"></span> are unrelated ids to the model that reads them.</li>
       <li><b>It cannot handle what it never saw.</b> This version starts from the characters of Shakespeare, so <span class="ex" data-ex="café 🙂" data-k="all"></span> leaves the
-        new characters outlined and unmerged. GPT-style tokenizers start from raw bytes instead, so nothing is unknown, though rare text still costs many tokens.</li>
+        new characters outlined and unmerged. GPT-2-style (byte-level) tokenizers start from raw bytes instead, so nothing is unknown, though rare text still costs many tokens.</li>
       <li><b>It is small.</b> <span data-stat="merges"></span> merges on <span data-stat="chars"></span> characters of one author. Production tokenizers learn far more merges from far more varied text.</li>
     </ul>
   </section>
@@ -302,7 +358,6 @@ footer p{margin:0;max-width:760px}
     <a href="https://arxiv.org/abs/1508.07909">Neural Machine Translation of Rare Words with Subword Units</a>, ACL 2016.
     The original compression algorithm: Philip Gage, “A New Algorithm for Data Compression”, <i>C Users Journal</i> 12(2), 1994.
     Training text: tiny-shakespeare from Andrej Karpathy’s <a href="https://github.com/karpathy/char-rnn">char-rnn</a>.</p>
-  <p class="credit">built with Claude for Joe Gao</p>
 </footer>
 </div>
 

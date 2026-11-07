@@ -1,6 +1,8 @@
 # How a model reads
 
-![How a model reads: three lines of text split into coloured token pills after 12 merges, beside the list of merges learned around that step](screenshots/shot-top.png)
+[![How a model reads: as the slider runs through 2,000 merges, single characters fuse into coloured token pills](loop/how-a-model-reads-loop.gif)](loop/how-a-model-reads-loop.mp4)
+
+<sub>10-second loop. Click for the MP4 (1280×720, 1.0 MB); the GIF above is 1280×720, 1.5 MB.</sub>
 
 A byte-pair encoding (BPE) tokenizer, the kind GPT-style models use, learned from scratch in plain Python on tiny-shakespeare. The page shows it merge by merge.
 
@@ -8,12 +10,12 @@ Type or paste text, or pick an example, and it is split into tokens drawn as col
 
 ## Open it
 
-Open `how-a-model-reads.html` in a recent browser. It is a single 71 kB file with the merge list inlined; it loads two fonts from Google Fonts.
+Open `how-a-model-reads.html` in a recent browser. It is a single 75 kB file with the merge list inlined; it loads two fonts from Google Fonts.
 
 - **Examples**: Mixed, Shakespeare, Modern, Code and Unseen characters.
 - **Slider**, <kbd>←</kbd> <kbd>→</kbd> and **Play**: step through the merges. With the token row focused, the arrow keys step through the tokens one at a time.
 - Hover a token to see where it came from.
-- **How it works** and **What BPE does not do** sit below the tokens.
+- **How it works** (the link under the stats card jumps there) and **What BPE does not do** sit below the tokens. On a phone the slider comes straight after the text box, above the tokens it changes.
 
 ## Method
 
@@ -70,10 +72,12 @@ The text used here has md5 `6fb458f1232090904fb40fe944165e91`.
 - `how-a-model-reads.html`: the piece
 - `train.py`: the trainer and reference encoder
 - `screenshots/`: the desktop view and the phone layout
+- `loop/`: the loop video, its GIF and a poster
 
 ## Credits and license
 
 - Rico Sennrich, Barry Haddow and Alexandra Birch. *Neural Machine Translation of Rare Words with Subword Units.* ACL 2016. [arXiv:1508.07909](https://arxiv.org/abs/1508.07909).
+- Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei and Ilya Sutskever. *Language Models are Unsupervised Multitask Learners.* OpenAI, 2019 (GPT-2, for the pre-split rule and byte-level BPE).
 - Philip Gage. *A New Algorithm for Data Compression.* C Users Journal 12(2), 1994.
 - Training text: tiny-shakespeare from Andrej Karpathy's [char-rnn](https://github.com/karpathy/char-rnn).
 
