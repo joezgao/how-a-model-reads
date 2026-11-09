@@ -10,6 +10,8 @@ Type or paste text, or pick an example, and it is split into tokens drawn as col
 
 ## Open it
 
+**Live:** [joezgao.github.io/how-a-model-reads/how-a-model-reads.html](https://joezgao.github.io/how-a-model-reads/how-a-model-reads.html) (nothing to install).
+
 Open `how-a-model-reads.html` in a recent browser. It is a single 75 kB file with the merge list inlined; it loads two fonts from Google Fonts.
 
 - **Examples**: Mixed, Shakespeare, Modern, Code and Unseen characters.
