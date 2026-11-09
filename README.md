@@ -65,7 +65,7 @@ python3 -I train.py input.txt 2000     # writes train.log and model.json next to
 
 The text used here has md5 `6fb458f1232090904fb40fe944165e91`.
 
-`train.log` has one line per merge (step, left, right, new token, id, pair count, training-text tokens after). The script that inlines `model.json` into the page, and the test cases, are not in this repository yet.
+`train.log` has one line per merge (step, left, right, new token, id, pair count, training-text tokens after). The script that inlines `model.json` into the page, and the test cases, are not included in this repository.
 
 ## In this repository
 
