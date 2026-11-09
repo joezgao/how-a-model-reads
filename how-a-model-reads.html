@@ -233,6 +233,9 @@ footer p{margin:0;max-width:760px}
 @media (prefers-reduced-motion: reduce){
   *{transition:none !important;animation:none !important}
 }
+  /* craft floor (DESIGN.md 11/9): neutral text selection, press feedback */
+  ::selection{background:rgba(128,128,128,.35)}
+  button:active:not(:disabled){filter:brightness(.85)}
 </style>
 </head>
 <body>
