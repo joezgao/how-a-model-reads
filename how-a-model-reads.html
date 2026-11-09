@@ -145,7 +145,8 @@ aside .label{margin-bottom:12px}
 #list .num{font-size:12px;color:var(--mute)}
 #list .pair{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 #list .cnt{font-size:12px;color:var(--dim);text-align:right}
-#list .future{opacity:.38}
+#list .future .mp{background:transparent;color:var(--mute);box-shadow:inset 0 0 0 1px var(--faint)}
+#list .future .cnt,#list .future .op{color:var(--mute)}   /* not yet merged: grey outlines, still 4.5:1 (was opacity .38, 1.5:1) */
 #list .current{border-left-color:var(--accent);background:var(--accent-soft)}
 #list .current .num{color:var(--accent)}
 #list .seen::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:middle}
@@ -564,9 +565,9 @@ function renderList(present) {
     const r = s - 1, id = NB + r;
     const cls = s === k ? "current" : s > k ? "future" : "";
     const seen = s <= k && present.has(id) ? " seen" : "";
-    h += `<li><button data-s="${s}" class="${cls}" aria-label="Go to merge ${s}: ${plain(vocab[L[r]])} plus ${plain(vocab[R[r]])} gives ${plain(vocab[id])}, pair count ${M.counts[r]}"${s === k ? ' aria-current="step"' : ""}>` +
-      `<span class="num">${fmt(s)}</span>` +
-      `<span class="pair${seen}">${miniPill(L[r], vocab[L[r]])}<span class="op">+</span>${miniPill(R[r], vocab[R[r]])}<span class="op">→</span>${miniPill(id, vocab[id])}</span>` +
+    h += `<li><button data-s="${s}" class="${cls}" aria-label="${fmt(s)} ${plain(vocab[L[r]])}+${plain(vocab[R[r]])}→${plain(vocab[id])} ${fmt(M.counts[r])}: go to merge ${s}, ${plain(vocab[L[r]])} plus ${plain(vocab[R[r]])} gives ${plain(vocab[id])}"${s === k ? ' aria-current="step"' : ""}>` +
+      `<span class="num">${fmt(s)}</span> ` +   // the spaces between grid cells do not render; they keep the name readable
+      `<span class="pair${seen}">${miniPill(L[r], vocab[L[r]])}<span class="op">+</span>${miniPill(R[r], vocab[R[r]])}<span class="op">→</span>${miniPill(id, vocab[id])}</span> ` +
       `<span class="cnt">${fmt(M.counts[r])}</span></button></li>`;
   }
   const focused = document.activeElement && document.activeElement.closest("#list") ? document.activeElement.dataset.s : null;
