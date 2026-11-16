@@ -11,7 +11,16 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;1,400;1,500&family=Inter:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;1,400;1,500&family=Inter:wght@400;500;600&display=swap"></noscript>
 <style>
-@font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");size-adjust:108.7%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+/* Inter fallback per weight, with digits and capitals sized on their own (unicode-range): Arial's are narrower than Inter's tabular digits and wider than its capitals */
+@font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");font-weight:100 449;size-adjust:106.7%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+@font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");font-weight:100 449;unicode-range:U+0030-0039;size-adjust:116.6%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+@font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");font-weight:100 449;unicode-range:U+0041-005A;size-adjust:99.5%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+@font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");font-weight:450 549;size-adjust:107.75%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+@font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");font-weight:450 549;unicode-range:U+0030-0039;size-adjust:116.5%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+@font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");font-weight:450 549;unicode-range:U+0041-005A;size-adjust:100.4%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+@font-face{font-family:"Inter fallback";src:local("Arial Bold"),local("Arial-BoldMT");font-weight:550 900;size-adjust:101.3%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+@font-face{font-family:"Inter fallback";src:local("Arial Bold"),local("Arial-BoldMT");font-weight:550 900;unicode-range:U+0030-0039;size-adjust:116.3%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
+@font-face{font-family:"Inter fallback";src:local("Arial Bold"),local("Arial-BoldMT");font-weight:550 900;unicode-range:U+0041-005A;size-adjust:99.8%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
 @font-face{font-family:"Lora fallback";src:local("Georgia");size-adjust:105.1%}
 @font-face{font-family:"Lora fallback";font-style:italic;src:local("Georgia Italic"),local("Georgia-Italic");size-adjust:99.7%}
 /* fallbacks sized to Inter and Lora so text does not reflow when the web fonts arrive */
@@ -73,6 +82,7 @@ textarea:focus{outline:none;border-color:var(--accent-line)}
 #info{font-size:12.5px;color:var(--dim);min-height:20px;margin:0;text-align:right}
 #info b{color:var(--fg);font-weight:500}
 #tokens{min-height:150px;max-height:420px;overflow:auto;padding:16px;border:1px solid var(--line);border-radius:10px;line-height:2.05;font-size:16px}
+#tokens:empty{min-height:198px}   /* five lines: the default text's height, held until the script fills it */
 #tokens:focus-visible{outline-offset:0}
 .tk{display:inline-flex;vertical-align:baseline;margin:0 3px 0 0;cursor:default}
 .sg{display:inline-block;padding:1px 0;line-height:1.45;white-space:pre;background:var(--c);color:var(--t)}
@@ -138,6 +148,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 aside{position:sticky;top:24px}
 aside .label{margin-bottom:12px}
 #list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+#list:empty{min-height:534px}   /* ROWS (13) rows, held until the script fills them */
 #list li{border-bottom:1px solid var(--line)}
 #list button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:8px;width:100%;padding:8px 8px 8px 10px;cursor:pointer;border-left:2px solid transparent;transition:background .15s}
 #list button:hover{background:#0c0c0c}
@@ -188,6 +199,8 @@ footer p{margin:0;max-width:760px}
   .compare{grid-column:1 / -1;text-align:left}
   .stepnum{font-size:34px}
   #tokens{padding:12px;font-size:15px;min-height:120px}
+  #tokens:empty{min-height:272px}
+  .compare:empty::before{content:"\00a0"}   /* hold its line so the stats below do not jump */
   .panel{padding:22px 18px}
   #list button{grid-template-columns:40px 1fr auto}
   .lower{margin-top:56px}
@@ -246,18 +259,18 @@ footer p{margin:0;max-width:760px}
   <h1>How a model reads</h1>
   <p class="lede">Before a language model sees a sentence, a tokenizer cuts it into pieces. Byte-pair encoding learns those pieces by counting:
   it finds the most frequent pair of neighbouring symbols, fuses it into one new symbol, and repeats.
-  This one is character-level and learned <b data-stat="merges"></b> merges from <b data-stat="chars"></b> characters of Shakespeare.
+  This one is character-level and learned <b data-stat="merges">2,000</b> merges from <b data-stat="chars">1,115,394</b> characters of Shakespeare.
   <span class="wide">Drag <a class="go" href="#scrub">the slider</a> to watch the pieces grow.</span></p>
   </div>
   <div class="meta">
   <p class="kicker">Byte-pair encoding, trained from scratch</p>
   <dl class="card" aria-label="Training log summary">
-    <div><dt>Base characters</dt><dd data-stat="base"></dd></div>
-    <div><dt>Merges learned</dt><dd data-stat="merges"></dd></div>
-    <div><dt>Vocabulary</dt><dd data-stat="vocab"></dd></div>
-    <div><dt>First pair count → last</dt><dd><span data-stat="first_count"></span> → <span data-stat="last_count"></span></dd></div>
-    <div><dt>Training text, in tokens</dt><dd><span data-stat="chars"></span> → <span data-stat="tokens_final"></span></dd></div>
-    <div><dt>Chars per token, at the end</dt><dd class="acc" data-stat="cpt"></dd></div>
+    <div><dt>Base characters</dt><dd data-stat="base">65</dd></div>
+    <div><dt>Merges learned</dt><dd data-stat="merges">2,000</dd></div>
+    <div><dt>Vocabulary</dt><dd data-stat="vocab">2,065</dd></div>
+    <div><dt>First pair count → last</dt><dd><span data-stat="first_count">23,837</span> → <span data-stat="last_count">34</span></dd></div>
+    <div><dt>Training text, in tokens</dt><dd><span data-stat="chars">1,115,394</span> → <span data-stat="tokens_final">384,882</span></dd></div>
+    <div><dt>Chars per token, at the end</dt><dd class="acc" data-stat="cpt">2.90</dd></div>
   </dl>
   <a class="made" href="#how">How it works</a>
   </div>
@@ -275,7 +288,9 @@ footer p{margin:0;max-width:760px}
       <button class="chip" data-preset="unseen" aria-pressed="false">Unseen characters</button>
     </div>
   </div>
-  <textarea id="input" rows="3" maxlength="6000" spellcheck="false" aria-describedby="readout-sr"></textarea>
+  <textarea id="input" rows="3" maxlength="6000" spellcheck="false" aria-describedby="readout-sr">Now is the winter of our discontent
+made glorious summer by this sun of York.
+The tokenizer streams GPU benchmarks overnight.</textarea>
 
   <div class="row tokens-head">
     <p class="label" id="tokens-label">Tokens</p>
@@ -294,7 +309,7 @@ footer p{margin:0;max-width:760px}
 
   <section class="scrub" id="scrub" aria-label="Merge step">
     <div class="scrub-top">
-      <div class="stepnum"><span id="stepnum">0</span><small>of <span data-stat="merges"></span> merges applied</small></div>
+      <div class="stepnum"><span id="stepnum">0</span><small>of <span data-stat="merges">2,000</span> merges applied</small></div>
       <div class="btns">
         <button class="btn" id="prev" aria-label="Previous merge">&#8592;</button>
         <button class="btn" id="next" aria-label="Next merge">&#8594;</button>
@@ -302,7 +317,7 @@ footer p{margin:0;max-width:760px}
       </div>
     </div>
     <input type="range" id="step" min="0" value="0" step="1" aria-label="Number of merges applied">
-    <div class="ticks" aria-hidden="true"><span>0, single characters</span><span><span data-stat="merges"></span>, every merge</span></div>
+    <div class="ticks" aria-hidden="true"><span>0, single characters</span><span><span data-stat="merges">2,000</span>, every merge</span></div>
     <p id="now"></p>
   </section>
 
@@ -317,7 +332,7 @@ footer p{margin:0;max-width:760px}
       <span class="ylab" style="top:100%">1.00</span>
       <div class="vline" id="vline"></div><div class="dot" id="dot"></div>
     </div>
-    <div class="xlab" aria-hidden="true"><span>0 merges</span><span class="xmid">chars / token of tiny-shakespeare, after each merge</span><span><span data-stat="merges"></span></span></div>
+    <div class="xlab" aria-hidden="true"><span>0 merges</span><span class="xmid">chars / token of tiny-shakespeare, after each merge</span><span><span data-stat="merges">2,000</span></span></div>
   </section>
 </main>
 
@@ -335,10 +350,10 @@ footer p{margin:0;max-width:760px}
       <li><b>Pre-split.</b> The text is cut into chunks, a simplified version of GPT-2’s rule (Radford et al., 2019): a word with its leading space, a run of digits, a run of punctuation, or whitespace.
         Merges never cross a chunk edge, so <span class="ex" data-ex=" the" data-k="all"></span> can exist but a token spanning two words cannot.
         The rule is one regular expression: <code id="pattern"></code></li>
-      <li><b>Start from characters.</b> Every distinct character in tiny-shakespeare is a token. There are <span data-stat="base"></span>.
-        The text has <span data-stat="chunks"></span> distinct chunks, each counted by how often it appears.</li>
+      <li><b>Start from characters.</b> Every distinct character in tiny-shakespeare is a token. There are <span data-stat="base">65</span>.
+        The text has <span data-stat="chunks">15,056</span> distinct chunks, each counted by how often it appears.</li>
       <li><b>Count and fuse.</b> Count every pair of neighbouring tokens inside the chunks. Fuse the most frequent pair into a new token everywhere it occurs.
-        Ties go to the pair with the smallest ids. Repeat <span data-stat="merges"></span> times, logging each merge. The whole run takes about <span data-stat="seconds"></span> seconds in plain Python.</li>
+        Ties go to the pair with the smallest ids. Repeat <span data-stat="merges">2,000</span> times, logging each merge. The whole run takes about <span data-stat="seconds">3</span> seconds in plain Python.</li>
       <li><b>Read new text.</b> Split it the same way, start from characters, then keep applying the earliest-learned merge that fits until none do.
         The slider simply limits which merges are allowed. Characters never seen in training have no merges, so they stay alone.</li>
       <li><b>Check.</b> The tokenizer on this page is a few dozen lines of JavaScript reading the exported merge list. On a test set of training lines, new sentences, code and unusual characters, its output equals the Python trainer's token for token.</li>
@@ -352,13 +367,13 @@ footer p{margin:0;max-width:760px}
       <li><b>It has no idea what anything means.</b> <span class="ex" data-ex=" the" data-k="all"></span> became a token at merge <span id="the-step"></span> only because
         <span class="ex" data-ex=" t" data-k="all"></span> and <span class="ex" data-ex="he" data-k="all"></span> sat next to each other <span id="the-count"></span> times. Frequency is the only signal.</li>
       <li><b>Its pieces depend on the training text.</b> The script format repeats speaker names, so <span class="ex" data-ex="NORTHUMBERLAND" data-k="all"></span> is a single token
-        (merge <span data-stat="longest_step"></span>), while a modern word falls apart: <span class="ex" data-ex="smartphone" data-k="all"></span>.
+        (merge <span data-stat="longest_step">1,482</span>), while a modern word falls apart: <span class="ex" data-ex="smartphone" data-k="all"></span>.
         Trained on other text, the same word would likely split differently.</li>
       <li><b>It does not know two spellings are one word.</b> <span class="ex" data-ex="the" data-k="all"></span>, <span class="ex" data-ex=" the" data-k="all"></span>,
         <span class="ex" data-ex="The" data-k="all"></span> and <span class="ex" data-ex="THE" data-k="all"></span> are unrelated ids to the model that reads them.</li>
       <li><b>It cannot handle what it never saw.</b> This version starts from the characters of Shakespeare, so <span class="ex" data-ex="café 🙂" data-k="all"></span> leaves the
         new characters outlined and unmerged. GPT-2-style (byte-level) tokenizers start from raw bytes instead, so nothing is unknown, though rare text still costs many tokens.</li>
-      <li><b>It is small.</b> <span data-stat="merges"></span> merges on <span data-stat="chars"></span> characters of one author. Production tokenizers learn far more merges from far more varied text.</li>
+      <li><b>It is small.</b> <span data-stat="merges">2,000</span> merges on <span data-stat="chars">1,115,394</span> characters of one author. Production tokenizers learn far more merges from far more varied text.</li>
     </ul>
   </section>
 </div>
