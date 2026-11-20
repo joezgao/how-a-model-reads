@@ -16,13 +16,16 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="A line of Shakespeare split into colored tokens after 2,000 merges, beside the list of merges near that step.">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;1,400;1,500&family=Inter:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;1,400;1,500&family=Inter:wght@400;500;600&display=swap"></noscript>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;1,400;1,500&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;1,400;1,500&display=swap"></noscript>
 <style>
 @view-transition{navigation:auto}
 @media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}
+/* Inter is self-hosted and preloaded (fontsource 5.3.0, OFL: fonts/OFL-Inter.txt) so text renders in it from the first paint; from Google it arrived after first paint and the lede re-wrapped, pushing the page down (CLS 0.23 on phones). Same fix as joe-site. */
+@font-face{font-family:"Inter";font-style:normal;font-display:swap;font-weight:100 900;src:url(fonts/inter-latin-wght-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 /* Inter fallback per weight, with digits and capitals sized on their own (unicode-range): Arial's are narrower than Inter's tabular digits and wider than its capitals */
 @font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");font-weight:100 449;size-adjust:106.7%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}
 @font-face{font-family:"Inter fallback";src:local("Arial"),local("ArialMT");font-weight:100 449;unicode-range:U+0030-0039;size-adjust:116.6%;ascent-override:90.4%;descent-override:22.5%;line-gap-override:0%}

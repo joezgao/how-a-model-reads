@@ -12,7 +12,7 @@ Type or paste text, or pick an example, and it is split into tokens drawn as col
 
 **Live:** [joezgao.github.io/how-a-model-reads/how-a-model-reads.html](https://joezgao.github.io/how-a-model-reads/how-a-model-reads.html) (nothing to install).
 
-Open `how-a-model-reads.html` in a recent browser. It is a single 75 kB file with the merge list inlined; it loads two fonts from Google Fonts.
+Open `how-a-model-reads.html` in a recent browser. It is a single 75 kB file with the merge list inlined. Inter is self-hosted in `fonts/` and preloaded, so text does not re-wrap when it arrives; Lora comes from Google Fonts.
 
 - **Examples**: Mixed, Shakespeare, Modern, Code and Unseen characters.
 - **Slider**, <kbd>←</kbd> <kbd>→</kbd> and **Play**: step through the merges. With the token row focused, the arrow keys step through the tokens one at a time.
