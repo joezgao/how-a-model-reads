@@ -108,7 +108,7 @@ textarea:focus{outline:none;border-color:var(--accent-line)}
 
 /* readout */
 .readout{display:grid;grid-template-columns:repeat(3,auto) 1fr;gap:12px 40px;align-items:end;margin:22px 0 0}
-.stat .n{font:500 30px/1 var(--sans);letter-spacing:-.02em}
+.stat .n{font:500 30px/1 var(--sans);letter-spacing:-.02em;font-variant-numeric:tabular-nums}   /* the font shorthand resets body tabular-nums */
 .stat .k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin-top:8px}
 .stat.ratio .n{color:var(--accent)}
 .compare{font-size:13px;color:var(--dim);text-align:right;line-height:1.5}
@@ -117,7 +117,7 @@ textarea:focus{outline:none;border-color:var(--accent-line)}
 /* scrubber */
 .scrub{margin-top:36px;padding-top:26px;border-top:1px solid var(--line)}
 .scrub-top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.stepnum{font:italic 400 40px/1 var(--serif)}
+.stepnum{font:italic 400 40px/1 var(--serif)}   /* proportional on purpose: tabular Lora italic reads gappy at 40px */
 .stepnum small{font:400 14px/1 var(--sans);font-style:normal;color:var(--dim);margin-left:8px}
 .btns{display:flex;gap:6px}
 /* one filled primary (Play); the arrows are outlined secondaries */
